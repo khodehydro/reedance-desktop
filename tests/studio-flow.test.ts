@@ -91,7 +91,7 @@ test("choosing audio copies it into the project and moves the state forward", ()
   assert.equal(detail.summary.state, "audio-selected");
   assert.equal(detail.media?.audioSha256, sha256Hex(fs.readFileSync(path.join(fixtures, "audio.wav"))));
   assert.ok(fs.existsSync(audio.audioPath), "the immutable copy lives inside the project folder");
-  assert.equal(fs.statSync(audio.audioPath).mode & 0o777, 0o444);
+  if (process.platform !== "win32") assert.equal(fs.statSync(audio.audioPath).mode & 0o777, 0o444);
 });
 
 test("marks must be inside the audio and increase strictly", () => {
@@ -156,7 +156,7 @@ test("full pipeline: approve, export, verify, statistics", () => {
   assert.ok(fs.existsSync(outcome.packPath));
   assert.ok(fs.existsSync(outcome.manifestPath));
   assert.equal(outcome.usedTestKeys, true);
-  assert.equal(fs.statSync(outcome.packPath).mode & 0o777, 0o444);
+  if (process.platform !== "win32") assert.equal(fs.statSync(outcome.packPath).mode & 0o777, 0o444);
 
   const { lesson } = buildLessonForExport(projectId);
   assert.deepEqual(validateLessonStructure(lesson), []);

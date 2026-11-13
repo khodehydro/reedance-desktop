@@ -98,6 +98,15 @@ export function writeFileAtomic(file: string, data: Buffer | string, mode?: numb
   } finally {
     fs.closeSync(fd);
   }
+  // Windows refuses to replace a file that still carries the read-only
+  // attribute (our immutable project copies use mode 0o444), so drop it first.
+  if (process.platform === "win32" && fs.existsSync(file)) {
+    try {
+      fs.chmodSync(file, 0o666);
+    } catch {
+      // Ignore: the rename below reports the real error.
+    }
+  }
   fs.renameSync(tmp, file);
   try {
     const dirFd = fs.openSync(path.dirname(file), "r");
