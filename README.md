@@ -12,6 +12,19 @@ The UI is Persian-first with a full English switch, RTL, blue/white, and uses
 the repository `logo.png` as window icon, sidebar mark, splash logo and
 installer icon. The splash screen is signed "HYDRO team".
 
+## Download the installer
+
+| file | size | SHA-256 |
+| --- | --- | --- |
+| `Reedance-Studio-Setup-1.0.0-x64.exe` | 135,172,135 bytes | `41eedbc0da1e322e57e0168cfe5e70f59885406da0d8dd5d075524714ff9125b` |
+
+The installer sits at the repository root of this workspace. A copy of the same
+build is attached to the GitHub release
+[`build-4`](https://github.com/khodehydro/reedance-desktop/releases/tag/build-4).
+It is unsigned, so Windows SmartScreen asks for **More info → Run anyway**.
+See [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for the Persian walkthrough, the
+English summary and the timeline shortcuts.
+
 ## Why the export cannot be wrong by accident
 
 The studio treats the draft as content only. Everything that makes a lesson

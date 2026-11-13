@@ -65,8 +65,12 @@ jobs:
           gh release create "$tag" release/*.exe --title "Reedance Studio ${tag}" \
             --notes "Unsigned NSIS installer built from ${GITHUB_SHA}. Windows SmartScreen will warn; verify the SHA-256 next to the file."
 
+      # Optional escape hatch: the sandbox that built this branch cannot reach
+      # action artifacts or release assets, so it can ask CI to commit the
+      # installer in chunks via the repository variable REEDANCE_TRANSPORT=on.
+      # Normal builds only publish the release.
       - name: Transport chunks for branch download
-        if: github.ref_name == 'arena/132cfe2a-reedance-desktop'
+        if: github.ref_name == 'arena/132cfe2a-reedance-desktop' && vars.REEDANCE_TRANSPORT == 'on'
         shell: bash
         run: |
           node scripts/split-artifact.mjs
