@@ -19,8 +19,8 @@ const STATE_LABEL: Record<ProjectSummary["state"], { fa: string; en: string; ton
   "raw-imported": { fa: "پیش‌نویس وارد‌شده", en: "raw imported", tone: "muted" },
   "audio-selected": { fa: "صوت انتخاب‌شده", en: "audio selected", tone: "info" },
   "sync-incomplete": { fa: "سینک ناتمام", en: "sync incomplete", tone: "warn" },
-  "review-ready": { fa: "آمادهٔ تأیید", en: "review ready", tone: "info" },
-  approved: { fa: "تأییدشده", en: "approved", tone: "ok" },
+  "review-ready": { fa: "آمادهٔ خروجی", en: "ready to export", tone: "info" },
+  approved: { fa: "آمادهٔ خروجی", en: "ready to export", tone: "ok" },
 };
 
 export function LibraryPage({
@@ -255,8 +255,8 @@ export function LibraryPage({
         {exports.length === 0 ? (
           <p className="muted">
             {t(
-              "هنوز بستهٔ رمزنگاری‌شده‌ای ساخته نشده است. خروجی فقط پس از تأیید نهایی ممکن است.",
-              "No encrypted pack has been built yet. Export is unlocked only after final approval.",
+              "هنوز بسته‌ای ساخته نشده است. از تب «خروجی» با یک کلیک فایل را بسازید.",
+              "No pack has been built yet. Open the export tab and press the button.",
             )}
           </p>
         ) : (

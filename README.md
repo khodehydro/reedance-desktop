@@ -15,7 +15,8 @@ applied in memory in `src/main/validation.ts`). Turkish projects are importable
 and exportable today and are flagged in the UI so they are only published to an
 Android build that accepts `tr`.
 
-The UI is Persian-first with a full English switch, RTL, blue/white, and uses
+The UI is Persian-first with a full English switch, RTL, blue/white, ships
+**dark, light and follow-system themes**, and uses
 the repository `logo.png` as window icon, sidebar mark, splash logo and
 installer icon. The splash screen is signed "HYDRO team".
 
@@ -45,15 +46,21 @@ playable is produced here:
    rendered as a waveform. Replacing it invalidates every mark and the approval.
 3. **Timeline** — mark/undo/redo, numeric edit, click-to-seek, `M` capture,
    `Space` play/pause, `J`/`K` line navigation, `A`/`B` loop, zoom.
-4. **Review** — per-line human approval plus the rights checklist
-   (audio / lyrics / cover / offline download, with an evidence reference).
-5. **Export** — blocked until every gate passes. Produces
-   `v000001-<sha256>.rdpack` (AES-256-GCM, GCM tag over the exact header as AAD,
-   ZIP with `lesson.json` + audio + optional cover) and a signed
+4. **Export** — one button. The app provisions its own AES-256 and Ed25519
+   keys on first launch (protected by DPAPI), resolves the version code and
+   writes `v000001-<sha256>.rdpack` (AES-256-GCM, GCM tag over the exact header
+   as AAD, ZIP with `lesson.json` + audio + optional cover) plus a signed
    `latest.json` (Ed25519, base64url, `REEDANCE-MANIFEST-V1` message).
-   Each written pack is re-opened and re-validated before it is recorded.
-6. **Publish** — optional HTTPS verification of a hosted `latest.json`/pack pair
+   Each written pack is re-opened and re-validated before it is recorded, and
+   the file is revealed in its folder.
+5. **Publish** — optional HTTPS verification of a hosted `latest.json`/pack pair
    with size caps, redirect restrictions and signature comparison.
+
+Only the three things that would make the package wrong block an export: no
+audio, unmeasured duration, and lyric lines without a (strictly increasing,
+in-range) start time — plus schema/semantic errors in the content itself.
+Review flags, the rights checklist and a human approval are no longer part of
+the flow; the studio never asks for keys either.
 
 Version codes are reserved monotonically per `songId`; the library keeps every
 version, its state (`built`, `verified`, `published`, `failed`), file sizes,

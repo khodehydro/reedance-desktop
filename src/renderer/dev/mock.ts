@@ -1,5 +1,6 @@
 import type {
   DraftContent,
+  ExportOutcome,
   ExportSummary,
   KeyRecord,
   LibraryData,
@@ -27,6 +28,7 @@ import type {
 const SETTINGS: Settings = {
   archiveDir: "(browser preview) no archive on disk",
   lang: "fa",
+  theme: "dark",
   reducedMotion: false,
   allowTestKeys: true,
   defaultManifestBaseUrl: "https://content.example.com/reedance",
@@ -507,17 +509,13 @@ export function createMockBridge(): StudioApi {
       { key: "duration", labelFa: "مدت صوت измер شده", labelEn: "Duration measured", ok: true, detail: `${media.durationMs} ms` },
       { key: "timed", labelFa: "همهٔ سطرها زمان دارند", labelEn: "All lines timed", ok: timed.length === content.lyrics.length, detail: `${timed.length}/${content.lyrics.length}` },
       { key: "timing", labelFa: "زمان‌ها صعودی‌اند", labelEn: "Timings ascending", ok: ascending, detail: ascending ? "ok" : "out of order" },
-      { key: "reviewed", labelFa: "همهٔ سطرها بازبینی شده‌اند", labelEn: "All lines reviewed", ok: reviewedCount() === content.lyrics.length, detail: `${reviewedCount()}/${content.lyrics.length}` },
       { key: "content", labelFa: "محتوا بدون خطاست", labelEn: "Content valid", ok: true, detail: "0" },
-      { key: "rights", labelFa: "چک‌لیست حقوق کامل است", labelEn: "Rights complete", ok: rights.audioRights && rights.lyricsRights && rights.offlineDownloadAllowed && !!rights.evidenceRef, detail: rights.evidenceRef || "ناقص" },
-      { key: "approved", labelFa: "تأیید نهایی ثبت شده", labelEn: "Approved", ok: !!approvedAt, detail: approvedAt ?? "—" },
-      { key: "approval-current", labelFa: "تأیید با نسخهٔ فعلی هم‌خوان است", labelEn: "Approval current", ok: !!approvedAt, detail: approvedAt ? "ok" : "—" },
     ];
   };
 
   const preflight = (): PreflightReport => ({
     projectId: "prj-preview",
-    canExport: gates().every((gate) => gate.ok),
+    canExport: gates().filter((gate) => ["audio", "duration", "timed", "timing", "content"].includes(gate.key)).every((gate) => gate.ok),
     gates: gates(),
     issues: [],
     nextVersionCode: exportsList.length + 1,
@@ -585,6 +583,62 @@ export function createMockBridge(): StudioApi {
       missing: 0,
     },
   });
+
+  const mockExport = (options: {
+    encryptionKeyId: string;
+    signatureKeyId: string;
+    displayVersion: string;
+    manifestBaseUrl: string;
+    useTestKeys: boolean;
+  }): ExportOutcome => {
+          const versionCode = exportsList.length + 1;
+          const sha = Array.from({ length: 64 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
+          exportsList = [
+            {
+              exportId: `exp-preview-${versionCode}`,
+              projectId: "prj-preview",
+              songId: content.songId,
+              targetLanguage: content.targetLanguage,
+              title: content.title,
+              versionCode,
+              displayVersion: options.displayVersion,
+              packPath: `(preview)/en/${content.songId}/v${String(versionCode).padStart(6, "0")}-${sha}.rdpack`,
+              packSha256: sha,
+              packSize: 412000,
+              manifestPath: "(preview)/latest.json",
+              manifestSha256: sha,
+              encryptionKeyId: options.encryptionKeyId,
+              signatureKeyId: options.signatureKeyId,
+              exportedAt: new Date().toISOString(),
+              usedTestKeys: true,
+              fileState: "present",
+              superseded: false,
+              publication: null,
+            },
+            ...exportsList.map((item) => ({ ...item, superseded: true })),
+          ];
+          return {
+            exportId: `exp-preview-${versionCode}`,
+            versionCode,
+            displayVersion: options.displayVersion,
+            packPath: `(preview)/v${versionCode}.rdpack`,
+            packSha256: sha,
+            packSize: 412000,
+            manifestPath: "(preview)/latest.json",
+            manifestSha256: sha,
+            manifestUrlHint: `${options.manifestBaseUrl}/${content.targetLanguage}/${content.songId}/latest.json`,
+            usedTestKeys: true,
+            verification: {
+              packLength: 412000,
+              packSha256: sha,
+              audioSha256: media.audioSha256,
+              lessonSchemaOk: true,
+              signatureVerified: true,
+              zipEntries: ["lesson.json", "audio.wav"],
+              nonceBase64url: "previewnonce",
+            },
+          };
+  };
 
   return {
     app: {
@@ -677,55 +731,15 @@ export function createMockBridge(): StudioApi {
     },
     exports: {
       preflight: async () => preflight(),
-      run: async (_projectId, options) => {
-        const versionCode = exportsList.length + 1;
-        const sha = Array.from({ length: 64 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
-        exportsList = [
-          {
-            exportId: `exp-preview-${versionCode}`,
-            projectId: "prj-preview",
-            songId: content.songId,
-            targetLanguage: content.targetLanguage,
-            title: content.title,
-            versionCode,
-            displayVersion: options.displayVersion,
-            packPath: `(preview)/en/${content.songId}/v${String(versionCode).padStart(6, "0")}-${sha}.rdpack`,
-            packSha256: sha,
-            packSize: 412000,
-            manifestPath: "(preview)/latest.json",
-            manifestSha256: sha,
-            encryptionKeyId: options.encryptionKeyId,
-            signatureKeyId: options.signatureKeyId,
-            exportedAt: new Date().toISOString(),
-            usedTestKeys: true,
-            fileState: "present",
-            superseded: false,
-            publication: null,
-          },
-          ...exportsList.map((item) => ({ ...item, superseded: true })),
-        ];
-        return {
-          exportId: `exp-preview-${versionCode}`,
-          versionCode,
-          displayVersion: options.displayVersion,
-          packPath: `(preview)/v${versionCode}.rdpack`,
-          packSha256: sha,
-          packSize: 412000,
-          manifestPath: "(preview)/latest.json",
-          manifestSha256: sha,
-          manifestUrlHint: `${options.manifestBaseUrl}/${content.targetLanguage}/${content.songId}/latest.json`,
-          usedTestKeys: true,
-          verification: {
-            packLength: 412000,
-            packSha256: sha,
-            audioSha256: media.audioSha256,
-            lessonSchemaOk: true,
-            signatureVerified: true,
-            zipEntries: ["lesson.json", "audio.wav"],
-            nonceBase64url: "previewnonce",
-          },
-        };
-      },
+      run: async (_projectId, options) => mockExport(options),
+      quick: async (_projectId, input) =>
+        mockExport({
+          encryptionKeyId: "enc-studio-preview",
+          signatureKeyId: "sig-studio-preview",
+          displayVersion: input?.displayVersion ?? "1.0.0",
+          manifestBaseUrl: input?.manifestBaseUrl ?? "",
+          useTestKeys: false,
+        }),
       verify: async () => ({ ...preflight(), verified: true, detail: ["Browser preview: nothing is written to disk."] }),
       stage: async () => null,
       publish: async (_exportId, manifestUrl) => ({

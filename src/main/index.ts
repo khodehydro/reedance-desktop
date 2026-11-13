@@ -3,6 +3,7 @@ import { BrowserWindow, Menu, app, dialog, nativeImage, session, shell } from "e
 import { CH } from "../shared/ipc";
 import { closeDatabase, flushNow, openDatabase } from "./db";
 import { registerIpc } from "./ipc";
+import { ensureStudioKeys } from "./keys";
 import { ensureDirs } from "./paths";
 import { registerMediaProtocol, registerMediaScheme } from "./protocol";
 
@@ -171,6 +172,13 @@ app.whenReady().then(async () => {
   try {
     ensureDirs();
     await openDatabase();
+    // Keys are provisioned by the app itself: exporting must never ask the
+    // operator to create or pick key material.
+    try {
+      ensureStudioKeys();
+    } catch (error) {
+      console.error("could not provision the studio keys", error);
+    }
     session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     session.defaultSession.setPermissionCheckHandler(() => false);
     registerMediaProtocol();

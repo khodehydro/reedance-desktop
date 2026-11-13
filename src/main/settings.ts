@@ -6,9 +6,10 @@ import { defaultArchiveDir } from "./paths";
 const DEFAULT_SETTINGS: Settings = {
   archiveDir: "",
   lang: "fa",
+  theme: "dark",
   reducedMotion: false,
   allowTestKeys: false,
-  defaultManifestBaseUrl: "https://content.example.com/reedance",
+  defaultManifestBaseUrl: "",
   complianceAckAt: undefined,
   lastProjectId: undefined,
 };
@@ -28,6 +29,7 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     fs.mkdirSync(next.archiveDir, { recursive: true });
   }
   if (next.lang !== "fa" && next.lang !== "en") next.lang = "fa";
+  if (next.theme !== "dark" && next.theme !== "light" && next.theme !== "system") next.theme = "dark";
   setSetting("studio.settings", JSON.stringify(next));
   return next;
 }

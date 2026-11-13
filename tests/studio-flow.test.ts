@@ -8,7 +8,7 @@ import { decryptPack, sha256Hex } from "../src/main/crypto/pack";
 import { verifyManifest } from "../src/main/crypto/sign";
 import { readZipStrict } from "../src/main/crypto/zip";
 import { closeDatabase, openDatabase } from "../src/main/db";
-import { runExport, verifyExport } from "../src/main/exporter";
+import { runExport, runQuickExport, verifyExport } from "../src/main/exporter";
 import { importDraftFile } from "../src/main/import";
 import { generateTestKeys, getAesKey, getSigningPublicKey, listKeys } from "../src/main/keys";
 import { importAudio, withMeasuredDuration } from "../src/main/media";
@@ -229,7 +229,7 @@ test("a second export reserves the next version code and keeps the first pack", 
   assert.ok(manifests.length >= 2);
 });
 
-test("editing content after export invalidates the approval and blocks a new export", () => {
+test("editing content keeps export possible but revokes the recorded approval and the review flags", () => {
   const content = getProjectDetail(projectId).content;
   const edited: DraftContent = {
     ...content,
@@ -242,9 +242,16 @@ test("editing content after export invalidates the approval and blocks a new exp
   assert.notEqual(detail.summary.state, "approved");
   assert.equal(detail.summary.approvedAt, null);
   const report = preflight(projectId);
-  assert.equal(report.canExport, false);
   const approvalGate = report.gates.find((gate) => gate.key === "approved");
-  assert.equal(approvalGate?.ok, false);
+  assert.equal(approvalGate?.ok, false, "the recorded approval no longer matches");
+
+  // Export itself only depends on the technical gates, so the edit does not
+  // lock the file; a missing timing does.
+  assert.equal(report.canExport, true);
+  saveMarks(projectId, [{ lineId: "line-1", startMs: null, endMs: null }], audio, edited);
+  const blocked = preflight(projectId);
+  assert.equal(blocked.canExport, false);
+  assert.equal(blocked.gates.find((gate) => gate.key === "timed")?.ok, false);
   assert.throws(
     () =>
       runExport(
@@ -258,8 +265,33 @@ test("editing content after export invalidates the approval and blocks a new exp
         },
         { archiveRoot },
       ),
-    /review|approv/i,
+    /export is locked/i,
   );
+});
+
+test("one-click export needs nothing from the operator: keys and version are automatic", () => {
+  const content = getProjectDetail(projectId).content;
+  saveMarks(
+    projectId,
+    [
+      { lineId: "line-1", startMs: 0, endMs: null },
+      { lineId: "line-2", startMs: 2000, endMs: null },
+    ],
+    audio,
+    content,
+  );
+  const outcome = runQuickExport(projectId, {}, { archiveRoot });
+  assert.equal(outcome.usedTestKeys, false, "the app provisions its own studio keys");
+  assert.ok(fs.existsSync(outcome.packPath));
+  assert.equal(outcome.manifestUrlHint, "", "no hosting URL is required to export");
+  const row = getProjectDetail(projectId).exports.find((item) => item.exportId === outcome.exportId);
+  assert.match(row?.encryptionKeyId ?? "", /^enc-studio-/, "an app-provisioned AES key is used");
+  assert.match(row?.signatureKeyId ?? "", /^sig-studio-/);
+  assert.equal(verifyExport(outcome.exportId).verified, true);
+
+  const next = runQuickExport(projectId, {}, { archiveRoot });
+  const nextRow = getProjectDetail(projectId).exports.find((item) => item.exportId === next.exportId);
+  assert.equal(nextRow?.encryptionKeyId, row?.encryptionKeyId, "the studio key is reused, not regenerated");
 });
 
 test("replacing the audio clears every mark and the approval", () => {

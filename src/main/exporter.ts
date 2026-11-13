@@ -9,7 +9,7 @@ import type {
   PreflightReport,
 } from "../shared/types";
 import { audit, flushNow, get, run, scalar, transaction } from "./db";
-import { getAesKey, getSigningPrivateKey, getSigningPublicKey, isTestKey } from "./keys";
+import { ensureStudioKeys, getAesKey, getSigningPrivateKey, getSigningPublicKey, isTestKey } from "./keys";
 import { assertInside, writeFileAtomic } from "./paths";
 import { buildLessonForExport, exportRow, loadProject, preflight, readMedia, readPayload } from "./projects";
 import { nowIso, sha256Hex } from "./util";
@@ -53,6 +53,34 @@ function nextFreeVersion(songId: string, songDir: string): number {
   return next;
 }
 
+export interface QuickExportInput {
+  displayVersion?: string;
+  manifestBaseUrl?: string;
+}
+
+/**
+ * The single button the operator uses.
+ *
+ * Everything the contract needs is resolved here: the studio keys (created on
+ * first use), a version string and an optional manifest base URL. No key picker,
+ * no confirmation dialogs.
+ */
+export function runQuickExport(projectId: string, input: QuickExportInput, context: ExportContext): ExportOutcome {
+  const { encryptionKeyId, signatureKeyId } = ensureStudioKeys();
+  const requested = (input.displayVersion ?? "").trim();
+  return runExport(
+    projectId,
+    {
+      encryptionKeyId,
+      signatureKeyId,
+      displayVersion: /^\d+\.\d+\.\d+$/.test(requested) ? requested : "1.0.0",
+      manifestBaseUrl: (input.manifestBaseUrl ?? "").trim(),
+      useTestKeys: isTestKey(encryptionKeyId) || isTestKey(signatureKeyId),
+    },
+    context,
+  );
+}
+
 export function songArchiveDir(context: ExportContext, targetLanguage: string, songId: string): string {
   const dir = path.join(context.archiveRoot, targetLanguage, songId);
   ensureDir(dir);
@@ -75,8 +103,8 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
   if (!/^\d+\.\d+\.\d+$/.test(options.displayVersion)) {
     throw new Error("displayVersion must look like 1.0.0");
   }
-  if (!options.manifestBaseUrl.startsWith("https://")) {
-    throw new Error("manifest base URL must be https");
+  if (options.manifestBaseUrl && !options.manifestBaseUrl.startsWith("https://")) {
+    throw new Error("manifest base URL must be https, or empty when nothing is hosted yet");
   }
   const testKeys = isTestKey(options.encryptionKeyId) || isTestKey(options.signatureKeyId);
   if (testKeys && !options.useTestKeys) {
@@ -258,7 +286,9 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
     packSize: pack.length,
     manifestPath: manifestCopy,
     manifestSha256: sha256Hex(manifestJson),
-    manifestUrlHint: `${options.manifestBaseUrl.replace(/\/+$/, "")}/${lesson.targetLanguage}/${lesson.songId}/latest.json`,
+    manifestUrlHint: options.manifestBaseUrl
+      ? `${options.manifestBaseUrl.replace(/\/+$/, "")}/${lesson.targetLanguage}/${lesson.songId}/latest.json`
+      : "",
     usedTestKeys: testKeys,
     verification: {
       packLength: verification.packLength,

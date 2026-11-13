@@ -61,6 +61,7 @@ const api: StudioApi = {
   },
   exports: {
     preflight: (projectId) => ipcRenderer.invoke(CH.exportPreflight, projectId),
+    quick: (projectId, input) => ipcRenderer.invoke(CH.exportQuick, projectId, input ?? {}),
     run: (projectId, options) => ipcRenderer.invoke(CH.exportRun, projectId, options),
     verify: (exportId) => ipcRenderer.invoke(CH.exportVerify, exportId),
     stage: (exportId) => ipcRenderer.invoke(CH.exportStage, exportId),

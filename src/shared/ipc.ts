@@ -35,6 +35,7 @@ export const CH = {
   reviewRevoke: "review:revoke",
 
   exportPreflight: "export:preflight",
+  exportQuick: "export:quick",
   exportRun: "export:run",
   exportVerify: "export:verify",
   exportStage: "export:stage",

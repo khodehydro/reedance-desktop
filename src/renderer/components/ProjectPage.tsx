@@ -16,8 +16,8 @@ const STATE_LABEL: Record<string, { fa: string; en: string; tone: "muted" | "inf
   "raw-imported": { fa: "پیش‌نویس وارد‌شده", en: "raw imported", tone: "muted" },
   "audio-selected": { fa: "صوت انتخاب‌شده", en: "audio selected", tone: "info" },
   "sync-incomplete": { fa: "سینک ناتمام", en: "sync incomplete", tone: "warn" },
-  "review-ready": { fa: "آمادهٔ تأیید", en: "review ready", tone: "info" },
-  approved: { fa: "تأییدشده", en: "approved", tone: "ok" },
+  "review-ready": { fa: "آمادهٔ خروجی", en: "ready to export", tone: "info" },
+  approved: { fa: "آمادهٔ خروجی", en: "ready to export", tone: "ok" },
 };
 
 type TabId = "overview" | "timeline" | "lyrics" | "learning" | "quiz" | "review";
@@ -179,7 +179,7 @@ export function ProjectPage({
           { id: "lyrics", label: t("متن و واژه", "Lyrics") },
           { id: "learning", label: t("آموزش", "Learning") },
           { id: "quiz", label: t("آزمون", "Quiz"), badge: content.questions.length },
-          { id: "review", label: t("بازبینی و خروجی", "Review & export") },
+          { id: "review", label: t("خروجی", "Export") },
         ]}
       />
 

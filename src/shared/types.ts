@@ -592,9 +592,12 @@ export interface PublicationOutcome {
   publishedAt: string;
 }
 
+export type ThemeMode = "dark" | "light" | "system";
+
 export interface Settings {
   archiveDir: string;
   lang: "fa" | "en";
+  theme: ThemeMode;
   reducedMotion: boolean;
   allowTestKeys: boolean;
   lastProjectId?: string;
@@ -656,6 +659,8 @@ export interface StudioApi {
     revoke(projectId: string): Promise<ProjectDetail>;
   };
   exports: {
+    /** One-click export: keys, version and manifest URL are resolved by the app. */
+    quick(projectId: string, input?: { displayVersion?: string; manifestBaseUrl?: string }): Promise<ExportOutcome>;
     preflight(projectId: string): Promise<PreflightReport>;
     run(
       projectId: string,

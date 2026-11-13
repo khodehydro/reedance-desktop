@@ -143,7 +143,8 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
   assert.ok(stats.includes("دامنهٔ گزارش"), "the statistics page explains its scope");
 
   const settings = await clickNav("تنظیمات");
-  assert.ok(settings.includes("کلیدهای رمزنگاری"), "the settings page mounts");
+  assert.ok(settings.includes("ظاهر"), "the settings page mounts");
+  assert.ok(settings.includes("پوشهٔ خروجی‌ها"), "the output folder setting is offered");
   assert.ok(settings.includes("HYDRO team"), "the about section keeps the HYDRO team credit");
 
   const library = await clickNav("کتابخانه");
@@ -175,7 +176,7 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
 
   // Every remaining project tab must mount too: the content editors, the quiz
   // editor and the review/export panel all read from the same bridge.
-  for (const label of ["متن و واژه", "آموزش", "آزمون", "بازبینی و خروجی"]) {
+  for (const label of ["متن و واژه", "آموزش", "آزمون", "خروجی"]) {
     const tab = Array.from(window.document.querySelectorAll(".tab")).find((element) =>
       (element.textContent ?? "").includes(label),
     );
@@ -184,8 +185,24 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
     await new Promise((resolve) => setTimeout(resolve, 160));
   }
   const reviewText = window.document.body.textContent ?? "";
-  assert.ok(/خروجی|Export/.test(reviewText), "the export panel renders");
-  assert.ok(window.document.querySelector(".gate-list"), "the preflight gate list is shown");
+  assert.ok(/دریافت فایل خروجی|Get the output file/.test(reviewText), "the one-click export button renders");
+  assert.ok(window.document.querySelector(".export-hero"), "the export panel explains readiness");
+  assert.ok(!reviewText.includes("چک‌لیست حقوق"), "the rights checklist page is gone");
+
+  // Light/dark/System theme switch: the resolved theme lands on <html>.
+  assert.equal(window.document.documentElement.dataset.theme, "dark");
+  const toggle = window.document.querySelector(".theme-toggle");
+  assert.ok(toggle, "the theme toggle is in the top bar");
+  (toggle as unknown as HTMLElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.ok((window.document.querySelector(".theme-toggle")?.textContent ?? "").includes("سیستم"), "dark → system");
+  (window.document.querySelector(".theme-toggle") as unknown as HTMLElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(window.document.documentElement.dataset.theme, "light");
+  (window.document.querySelector(".theme-toggle") as unknown as HTMLElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(window.document.documentElement.dataset.theme, "dark");
+  assert.ok(window.document.querySelector(".app"), "the shell survives the theme change");
 
   assert.deepEqual(errors, [], errors.join("; "));
 });

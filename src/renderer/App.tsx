@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LANGUAGE_META, SUPPORTED_LANGUAGES, type AppInfo, type LibraryData, type Settings, type TargetLanguage } from "@shared/types";
+import {
+  LANGUAGE_META,
+  SUPPORTED_LANGUAGES,
+  type AppInfo,
+  type LibraryData,
+  type Settings,
+  type TargetLanguage,
+  type ThemeMode,
+} from "@shared/types";
 import { api, isMock } from "./api";
 import { LangContext, type Lang } from "./i18n";
 import { LibraryPage } from "./components/LibraryPage";
@@ -52,6 +60,30 @@ function AppInner(): React.ReactElement {
   const bootStarted = useRef(Date.now());
 
   const lang: Lang = settings?.lang ?? "fa";
+  const theme: ThemeMode = settings?.theme ?? "dark";
+
+  // Theme lives on <html data-theme>; CSS variables do the rest. "system"
+  // follows the OS preference and re-evaluates when it changes.
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = (): void => {
+      const resolved = theme === "system" ? (media.matches ? "light" : "dark") : theme;
+      document.documentElement.dataset.theme = resolved;
+      document.body.dataset.theme = resolved;
+    };
+    apply();
+    if (theme !== "system") return;
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+
+  const toggleTheme = useCallback(async () => {
+    if (!settings) return;
+    const next: ThemeMode =
+      settings.theme === "light" ? "dark" : settings.theme === "dark" ? "system" : "light";
+    const saved = await api.settings.set({ theme: next });
+    setSettings(saved);
+  }, [settings]);
 
   const refreshLibrary = useCallback(async () => {
     try {
@@ -240,12 +272,21 @@ function AppInner(): React.ReactElement {
                   : view.name === "stats"
                     ? t("آمار و گزارش", "Statistics")
                     : view.name === "settings"
-                      ? t("تنظیمات و کلیدها", "Settings & keys")
+                      ? t("تنظیمات", "Settings")
                       : t("ویرایش پروژه", "Project editor")}
               </span>
             </div>
             <div className="topbar-actions">
               {isMock ? <Badge tone="warn">{t("پیش‌نمایش مرورگر", "browser preview")}</Badge> : null}
+              <button
+                className="theme-toggle"
+                onClick={() => void toggleTheme()}
+                title={t("تغییر تیره/روشن", "Toggle light/dark")}
+                aria-label={t("تغییر تیره/روشن", "Toggle light/dark")}
+              >
+                {theme === "light" ? "☀" : theme === "system" ? "◐" : "☾"}
+                <span className="tiny">{theme === "light" ? t("روشن", "light") : theme === "system" ? t("سیستم", "system") : t("تیره", "dark")}</span>
+              </button>
               <div className="lang-switch" role="group" aria-label="language">
                 <button className={lang === "fa" ? "active" : ""} onClick={() => void changeLang("fa")}>
                   فا

@@ -14,7 +14,7 @@ import { SUPPORTED_LANGUAGES, isTargetLanguage } from "../shared/types";
 import { CH } from "../shared/ipc";
 import { all, audit, flushNow } from "./db";
 import { rescanArchive, stageExport } from "./archive";
-import { runExport, verifyExportReport } from "./exporter";
+import { runExport, runQuickExport, verifyExportReport } from "./exporter";
 import { createEmptyDraft, importDraftFile } from "./import";
 import {
   backupKeys,
@@ -341,6 +341,21 @@ export function registerIpc(): void {
 
   ipcMain.handle(CH.exportPreflight, (_event, projectId: unknown) => {
     return getProjectDetail(id(projectId, "projectId")).preflight;
+  });
+
+  ipcMain.handle(CH.exportQuick, (_event, projectId: unknown, input: unknown) => {
+    const project = id(projectId, "projectId");
+    const raw = input === undefined || input === null ? {} : obj(input, "input");
+    const outcome = runQuickExport(
+      project,
+      {
+        displayVersion: raw.displayVersion === undefined ? undefined : str(raw.displayVersion, "displayVersion", 32),
+        manifestBaseUrl: raw.manifestBaseUrl === undefined ? undefined : str(raw.manifestBaseUrl, "manifestBaseUrl", 300),
+      },
+      { archiveRoot: getSettings().archiveDir },
+    );
+    notifyChanged();
+    return outcome;
   });
 
   ipcMain.handle(CH.exportRun, (_event, projectId: unknown, options: unknown) => {

@@ -159,6 +159,53 @@ export function generateTestKeys(): KeyRecord[] {
   return listKeys();
 }
 
+/**
+ * Zero-configuration keys.
+ *
+ * The operator should not have to create, pick or confirm key material: the app
+ * provisions one AES-256 key and one Ed25519 key on first use, keeps them in the
+ * OS keystore and reuses them for every export. Only a passphrase backup stays
+ * optional in Settings.
+ */
+export function ensureStudioKeys(): { encryptionKeyId: string; signatureKeyId: string } {
+  const file = load();
+  let changed = false;
+  let enc = file.keys.find((key) => key.kind === "enc" && !key.testOnly);
+  let sig = file.keys.find((key) => key.kind === "sig" && !key.testOnly);
+
+  if (!enc) {
+    const aes = crypto.randomBytes(32);
+    const { secret, protection } = protect(aes);
+    enc = {
+      keyId: `enc-studio-${randomSuffix()}`,
+      kind: "enc",
+      createdAt: new Date().toISOString(),
+      testOnly: false,
+      protection,
+      secret,
+    };
+    upsert(file, enc);
+    changed = true;
+  }
+  if (!sig) {
+    const { seed, publicRaw } = generateSigningKeyPair();
+    const { secret, protection } = protect(seed);
+    sig = {
+      keyId: `sig-studio-${randomSuffix()}`,
+      kind: "sig",
+      createdAt: new Date().toISOString(),
+      testOnly: false,
+      protection,
+      secret,
+      publicKeyBase64url: toBase64Url(publicRaw),
+    };
+    upsert(file, sig);
+    changed = true;
+  }
+  if (changed) save(file);
+  return { encryptionKeyId: enc.keyId, signatureKeyId: sig.keyId };
+}
+
 export interface ImportedKeyFile {
   encryptionKeyId?: string;
   aes256KeyBase64url?: string;

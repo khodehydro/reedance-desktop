@@ -315,6 +315,16 @@ function projectIssues(row: ProjectRow, content: DraftContent, media: MediaInfo 
   return { errors, warnings };
 }
 
+/**
+ * Gates that actually protect the produced file.
+ *
+ * Review flags, the rights checklist and the human approval used to block the
+ * export; they are still recorded when the operator uses them, but export now
+ * depends only on what would make the pack wrong: audio, measured duration,
+ * complete timings, and valid lesson content.
+ */
+export const EXPORT_GATES = ["audio", "duration", "timed", "timing", "content"] as const;
+
 export function preflight(projectId: string): PreflightReport {
   const row = loadProject(projectId);
   const content = readContent(row);
@@ -420,7 +430,9 @@ export function preflight(projectId: string): PreflightReport {
 
   return {
     projectId,
-    canExport: gates.every((gate) => gate.ok),
+    canExport: gates
+      .filter((gate) => (EXPORT_GATES as readonly string[]).includes(gate.key))
+      .every((gate) => gate.ok),
     gates,
     issues,
     nextVersionCode: nextVersionCode(row.song_id),

@@ -1233,3 +1233,283 @@ code,
     padding: 16px;
   }
 }
+
+/* ------------------------------ theme toggle ------------------------------ */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: rgba(95, 176, 255, 0.5);
+  color: var(--text);
+}
+
+.theme-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  max-width: 520px;
+}
+
+.theme-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.theme-card:hover {
+  border-color: rgba(95, 176, 255, 0.45);
+}
+
+.theme-card-active {
+  border-color: var(--accent);
+  background: rgba(95, 176, 255, 0.14);
+  color: var(--text);
+  box-shadow: 0 0 0 2px rgba(95, 176, 255, 0.16) inset;
+}
+
+.theme-card-icon {
+  font-size: 18px;
+  color: var(--accent);
+}
+
+/* ------------------------------ export hero ------------------------------ */
+
+.export-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(95, 176, 255, 0.06);
+}
+
+.export-hero-text {
+  display: grid;
+  gap: 6px;
+}
+
+.export-checks {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.export-hero-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.advanced-toggle {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.path-cell {
+  direction: ltr;
+  unicode-bidi: embed;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------ light theme ------------------------------ */
+
+:root {
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f7fd;
+  --bg-soft: #eaf1fa;
+  --panel: #ffffff;
+  --panel-2: #f8fbff;
+  --panel-3: #eef4fd;
+  --line: rgba(24, 60, 110, 0.12);
+  --line-strong: rgba(24, 60, 110, 0.22);
+  --text: #10233c;
+  --text-soft: #2c405c;
+  --muted: #5f748f;
+  --accent: #1f7ae0;
+  --accent-strong: #1665c0;
+  --mint: #0e9d75;
+  --amber: #b47500;
+  --coral: #c2503c;
+  --ok: #128a63;
+  --danger: #c0392b;
+  --shadow: 0 12px 30px rgba(18, 46, 84, 0.1);
+}
+
+[data-theme="light"] body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+[data-theme="light"] .app {
+  background:
+    radial-gradient(1100px 520px at 15% -10%, rgba(31, 122, 224, 0.1), transparent 60%),
+    radial-gradient(900px 460px at 100% 0%, rgba(18, 138, 99, 0.06), transparent 55%),
+    var(--bg);
+}
+
+[data-theme="light"] .sidebar {
+  background: linear-gradient(180deg, #ffffff, #eff5fd);
+}
+
+[data-theme="light"] .topbar {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+[data-theme="light"] .panel,
+[data-theme="light"] .project-card,
+[data-theme="light"] .stat-card,
+[data-theme="light"] .modal,
+[data-theme="light"] .toast,
+[data-theme="light"] .empty,
+[data-theme="light"] .chip {
+  background: #ffffff;
+}
+
+[data-theme="light"] .mini-panel,
+[data-theme="light"] .card,
+[data-theme="light"] .line-editor,
+[data-theme="light"] .table-editor,
+[data-theme="light"] .line-table,
+[data-theme="light"] .transport {
+  background: #f6faff;
+}
+
+[data-theme="light"] .wave-scroll {
+  background: #e9f1fb;
+  box-shadow: inset 0 0 24px rgba(18, 46, 84, 0.08);
+}
+
+[data-theme="light"] .line-head {
+  background: #f1f6fd;
+}
+
+[data-theme="light"] .table th {
+  background: #f1f6fd;
+}
+
+[data-theme="light"] .table tr:hover td,
+[data-theme="light"] .line-row:hover {
+  background: rgba(31, 122, 224, 0.06);
+}
+
+[data-theme="light"] .input {
+  background: #ffffff;
+  color: var(--text);
+}
+
+[data-theme="light"] .grid-input {
+  background: transparent;
+}
+
+[data-theme="light"] .btn {
+  background: rgba(16, 35, 60, 0.04);
+}
+
+[data-theme="light"] .btn:hover:not(:disabled) {
+  background: rgba(31, 122, 224, 0.12);
+}
+
+[data-theme="light"] .badge {
+  background: rgba(16, 35, 60, 0.05);
+}
+
+[data-theme="light"] .theme-toggle,
+[data-theme="light"] .theme-card {
+  background: rgba(16, 35, 60, 0.04);
+}
+
+[data-theme="light"] .nav-active {
+  background: rgba(31, 122, 224, 0.12);
+  color: #0b2340;
+  border-color: rgba(31, 122, 224, 0.3);
+}
+
+[data-theme="light"] .nav-item:hover {
+  background: rgba(31, 122, 224, 0.08);
+}
+
+[data-theme="light"] .nav-item,
+[data-theme="light"] .nav-item:hover {
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .callout {
+  background: rgba(31, 122, 224, 0.07);
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .callout-warn {
+  background: rgba(180, 117, 0, 0.09);
+}
+
+[data-theme="light"] .callout-bad {
+  background: rgba(192, 57, 43, 0.08);
+}
+
+[data-theme="light"] .callout-ok {
+  background: rgba(18, 138, 99, 0.08);
+}
+
+[data-theme="light"] .export-hero {
+  background: rgba(31, 122, 224, 0.06);
+}
+
+[data-theme="light"] .export-result {
+  background: rgba(18, 138, 99, 0.06);
+}
+
+[data-theme="light"] .token-row .input,
+[data-theme="light"] .option-row .input,
+[data-theme="light"] .pair-row .input,
+[data-theme="light"] .chunk-row .input {
+  background: #ffffff;
+}
+
+[data-theme="light"] .splash {
+  background:
+    radial-gradient(circle at 50% 34%, #dbe8f9, #f5f8fd 62%),
+    var(--bg);
+}
+
+[data-theme="light"] .splash-title {
+  color: #0b2340;
+}
+
+[data-theme="light"] .line-selected {
+  background: rgba(255, 205, 107, 0.28);
+}
+
+[data-theme="light"] .muted {
+  color: var(--muted);
+}

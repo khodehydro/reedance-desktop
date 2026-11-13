@@ -21,18 +21,16 @@
 | ۱. ورود پیش‌نویس | «ورود پیش‌نویس» → فایل `*.rddraft.json` | ساختار و قواعد محتوایی بدون خطا؛ هیچ timing/مدیایی در فایل نباشد |
 | ۲. انتخاب صوت | تب «صوت» → انتخاب فایل از سیستم | کپی محلی، هش SHA-256، کدک و مدت اندازه‌گیری شود |
 | ۳. سینک لیریک | تب «تایم‌لاین» | هر سطر زمان شروع دارد، زمان‌ها صعودی و داخل مدت صوت‌اند |
-| ۴. بازبینی | دکمهٔ ✓ کنار هر سطر + چک‌لیست حقوق | همهٔ سطرها با همین صوت تأیید شوند، مدرک حقوق ثبت شود |
-| ۵. تأیید نهایی | «ثبت تأیید انسانی» | فقط وقتی همهٔ گیت‌ها سبز باشند |
-| ۶. خروجی | تب «بازبینی و خروجی» | ساخت `.rdpack` رمزنگاری‌شده + `latest.json` امضاشده |
+| ۴. خروجی | تب «خروجی» → دکمهٔ **دریافت فایل خروجی** | ساخت `.rdpack` + `latest.json` امضاشده با کلیدهای خودکار |
 
-اگر صوت را عوض کنید، همهٔ زمان‌ها و تأیید باطل می‌شوند؛ این رفتار عمدی است و در هشدار برنامه هم نوشته می‌شود.
-اگر محتوا، زمان‌ها یا چک‌لیست حقوق بعد از تأیید تغییر کند، تأیید خودکار باطل می‌شود.
+کلیدها را خود برنامه می‌سازد (AES-256 و Ed25519، محافظت‌شده با DPAPI) و بازبینی/تأیید انسانی و چک‌لیست حقوق از جریان کار حذف شده است. فقط سه چیز خروجی را قفل می‌کند: نبودِ صوت، مدت نامشخص، و سطرهای بدون زمان یا زمان‌های نامرتب.
+
+اگر صوت را عوض کنید، همهٔ زمان‌ها پاک می‌شوند و باید دوباره سینک کنید؛ این رفتار عمدی است.
+ظاهر برنامه از دکمهٔ ☾/☀ بالای صفحه بین تیره، روشن و «مطابق سیستم» جابه‌جا می‌شود.
 
 ## کلیدها
 
-- کلیدهای **آزمایشی** فقط برای تمرین جریان‌اند و خروجی‌شان هرگز «منتشرشده» ثبت نمی‌شود.
-- برای انتشار واقعی: «تنظیمات → کلیدها → ساخت کلید تولیدی»، سپس از کلیدهای تولیدی پشتیبان رمزدار بگیرید.
-- کلید خصوصی امضا و کلید AES فقط روی همین رایانه می‌مانند. گم شدن‌شان یعنی نسخه‌های بعدی منتشر یا رمزگشایی نمی‌شوند.
+کلیدها کاملاً خودکار هستند: در اولین اجرا ساخته می‌شوند، در پروفایل ویندوز با DPAPI محافظت می‌شوند و برای همهٔ خروجی‌ها دوباره استفاده می‌شوند. هیچ انتخابی لازم نیست. تنها نکته: اگر پروفایل ویندوز پاک شود، بسته‌های قبلی دیگر با همان کلید تأیید نمی‌شوند.
 
 ## انتشار
 
@@ -52,7 +50,7 @@
 
 Install `Reedance-Studio-Setup-1.0.1-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
 
-The pipeline is deliberately linear: import a content-only `.rddraft.json`, pick the audio from your machine, mark every lyric line on the waveform, review each line and the rights checklist, record the human approval, then export. The export button stays locked until every gate is green, and any later change to content, timings, rights or audio invalidates the approval.
+The pipeline is deliberately linear: import a content-only `.rddraft.json`, pick the audio from your machine, mark every lyric line on the waveform, then press **Get the output file**. Keys are generated and protected by the app; there is no key picker and no approval ceremony. Export is only blocked by a missing audio file, an unmeasured duration or untimed lines. Replacing the audio clears the marks so stale timings can never be exported. Theme: ☾/☀ in the top bar (dark, light, system).
 
 Keys are local to the machine and protected by the OS keystore when available. TEST keys exist only to exercise the flow: their exports are permanently marked as test and can never be published.
 

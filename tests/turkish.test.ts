@@ -7,9 +7,9 @@ import type { DraftContent, RightsChecklist } from "../src/shared/types";
 import { decryptPack, sha256Hex } from "../src/main/crypto/pack";
 import { readZipStrict } from "../src/main/crypto/zip";
 import { closeDatabase, openDatabase } from "../src/main/db";
-import { runExport } from "../src/main/exporter";
+import { runQuickExport } from "../src/main/exporter";
 import { importDraftFile } from "../src/main/import";
-import { generateTestKeys, getAesKey } from "../src/main/keys";
+import { ensureStudioKeys, getAesKey } from "../src/main/keys";
 import { importAudio } from "../src/main/media";
 import {
   approveProject,
@@ -124,24 +124,12 @@ test("a Turkish project exports a pack whose lesson.json validates", () => {
   approveProject(projectId, "QA operator", "Turkish smoke test");
   assert.equal(preflight(projectId).canExport, true);
 
-  const keys = generateTestKeys();
-  const encKeyId = keys.find((key) => key.kind === "enc")!.keyId;
-  const sigKeyId = keys.find((key) => key.kind === "sig")!.keyId;
-  const exported = runExport(
-    projectId,
-    {
-      encryptionKeyId: encKeyId,
-      signatureKeyId: sigKeyId,
-      displayVersion: "1.0.0",
-      manifestBaseUrl: "https://content.example.com/reedance",
-      useTestKeys: true,
-    },
-    { archiveRoot: path.join(workspace, "archive") },
-  );
+  const { encryptionKeyId } = ensureStudioKeys();
+  const exported = runQuickExport(projectId, {}, { archiveRoot: path.join(workspace, "archive") });
 
   const pack = fs.readFileSync(exported.packPath);
   assert.equal(sha256Hex(pack), exported.packSha256);
-  const { plaintext } = decryptPack(pack, getAesKey(encKeyId));
+  const { plaintext } = decryptPack(pack, getAesKey(encryptionKeyId));
   const lesson = JSON.parse(readZipStrict(plaintext).files["lesson.json"].toString("utf8"));
   assert.equal(lesson.targetLanguage, "tr");
   assert.equal(lesson.locale, "tr-TR");

@@ -54,12 +54,6 @@ export function TimelineTab({
   });
   const [dirty, setDirty] = useState(false);
   const [loop, setLoop] = useState<{ a: number | null; b: number | null; active: boolean }>({ a: null, b: null, active: false });
-  const [pendingReview, setPendingReview] = useState(false);
-
-  const reviewedIds = useMemo(
-    () => new Set(detail.marks.filter((mark) => mark.reviewed).map((mark) => mark.lineId)),
-    [detail.marks],
-  );
 
   /* Resync when the project changes underneath us (e.g. after a save). */
   useEffect(() => {
@@ -324,32 +318,6 @@ export function TimelineTab({
     return () => clearTimeout(timer);
   }, [dirty, marks, onChanged, projectId, toast]);
 
-  const toggleReviewed = async (lineId: string, reviewed: boolean): Promise<void> => {
-    setPendingReview(true);
-    try {
-      await api.marks.setReviewed(projectId, [lineId], reviewed);
-      await onChanged();
-    } catch (error) {
-      toast.push(error instanceof Error ? error.message : String(error), "bad");
-    } finally {
-      setPendingReview(false);
-    }
-  };
-
-  const reviewAllTimed = async (): Promise<void> => {
-    const timed = content.lyrics.filter((line) => marks[line.id]?.startMs !== null).map((line) => line.id);
-    setPendingReview(true);
-    try {
-      await api.marks.setReviewed(projectId, timed, true);
-      await onChanged();
-      toast.push(t(`${timed.length} سطر بازبینی شد.`, `${timed.length} lines marked as reviewed.`), "ok");
-    } catch (error) {
-      toast.push(error instanceof Error ? error.message : String(error), "bad");
-    } finally {
-      setPendingReview(false);
-    }
-  };
-
   const pointerPosition = (event: React.PointerEvent<HTMLDivElement>): number => {
     const rect = event.currentTarget.getBoundingClientRect();
     return event.clientX - rect.left;
@@ -488,11 +456,6 @@ export function TimelineTab({
           {dirty ? <Badge tone="warn">{t("ذخیره‌نشده", "unsaved")}</Badge> : <Badge tone="ok">{t("ذخیره شد", "saved")}</Badge>}
           {decodeState === "error" ? <Badge tone="warn">{t("waveform ناموجود", "waveform unavailable")}</Badge> : null}
         </div>
-        <div className="row gap-sm">
-          <Button variant="ghost" size="sm" onClick={() => void reviewAllTimed()} disabled={pendingReview}>
-            {t("بازبینی همهٔ سطرهای زمان‌دار", "Review all timed lines")}
-          </Button>
-        </div>
       </div>
 
       <div className="line-table">
@@ -501,12 +464,11 @@ export function TimelineTab({
           <span>{t("متن", "text")}</span>
           <span>{t("شروع", "start")}</span>
           <span>{t("پایان", "end")}</span>
-          <span>{t("بازبینی", "review")}</span>
+          <span>{t("ثبت", "mark")}</span>
         </div>
         <div className="line-rows">
           {content.lyrics.map((line, index) => {
             const mark = marks[line.id] ?? { startMs: null, endMs: null };
-            const reviewed = reviewedIds.has(line.id);
             return (
               <div
                 key={line.id}
@@ -529,17 +491,6 @@ export function TimelineTab({
                   onSeek={() => mark.endMs !== null && seek(mark.endMs)}
                 />
                 <span className="line-review">
-                  <button
-                    className="icon-btn"
-                    title={reviewed ? t("لغو بازبینی", "Unmark review") : t("بازبینی این سطر", "Mark reviewed")}
-                    disabled={pendingReview || mark.startMs === null}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void toggleReviewed(line.id, !reviewed);
-                    }}
-                  >
-                    {reviewed ? "✓" : "○"}
-                  </button>
                   <button
                     className="icon-btn"
                     title={t("ثبت زمان همین سطر", "Capture this line")}
