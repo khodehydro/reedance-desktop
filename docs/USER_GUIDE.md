@@ -2,13 +2,17 @@
 
 ## نصب
 
-1. فایل `Reedance-Studio-Setup-1.0.0-x64.exe` را اجرا کنید.
+1. فایل `Reedance-Studio-Setup-1.0.1-x64.exe` را اجرا کنید.
 2. چون فایل با گواهی تجاری امضا نشده است، ویندوز SmartScreen هشدار می‌دهد: **More info → Run anyway**.
 3. مسیر نصب را انتخاب کنید (نصب برای کاربر جاری، بدون نیاز به دسترسی مدیر).
 4. میان‌بر روی دسکتاپ و منوی استارت ساخته می‌شود.
 
-نسخهٔ فایل: `1.0.0` — SHA-256:
-`41eedbc0da1e322e57e0168cfe5e70f59885406da0d8dd5d075524714ff9125b`
+نسخهٔ فایل: `1.0.1` — SHA-256:
+`f5fcfa6596bfad092244037b9fff3897ad8fa32dc5a39454ac8553c69a859119`
+
+## زبان‌ها
+
+پیش‌نویس‌های `en`، `es`، `ko` و `tr` پذیرفته می‌شوند. زبان **ترکی** یک افزونهٔ سمت استودیو است: قرارداد v1 فقط `en/es/ko` را فهرست می‌کند، بنابراین بسته‌های `tr` با یک هشدار مشخص می‌شوند و باید فقط روی نسخه‌ای از اپ اندروید منتشر شوند که `tr` را می‌پذیرد. اگر پیش‌نویس فیلد `level` نداشته باشد (مثل بعضی فایل‌های ترکی)، در تب «نمای کلی» سطح A1–C2 را انتخاب کنید؛ تا آن زمان خروجی قفل است.
 
 ## جریان کار
 
@@ -46,10 +50,16 @@
 
 # Reedance Studio — user guide (English)
 
-Install `Reedance-Studio-Setup-1.0.0-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
+Install `Reedance-Studio-Setup-1.0.1-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
 
 The pipeline is deliberately linear: import a content-only `.rddraft.json`, pick the audio from your machine, mark every lyric line on the waveform, review each line and the rights checklist, record the human approval, then export. The export button stays locked until every gate is green, and any later change to content, timings, rights or audio invalidates the approval.
 
 Keys are local to the machine and protected by the OS keystore when available. TEST keys exist only to exercise the flow: their exports are permanently marked as test and can never be published.
+
+Supported target languages are en, es, ko and tr. Turkish is a studio-side
+extension over the pinned v1 contract and is flagged in the UI; Turkish packs
+must only be published to an Android build that accepts `tr`. Drafts without a
+`level` (common in the Turkish set) need one chosen in the overview tab before
+export unlocks.
 
 Keyboard: `Space` play/pause, `M` capture a mark and advance, `←/→` ±100 ms (`Shift` ±1 s), `J/K` previous/next line, `A/B` loop points.
