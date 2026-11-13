@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+out/
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.env
+.env.*
+*.local
+coverage/
+.arena/

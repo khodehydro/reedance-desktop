@@ -1,0 +1,59 @@
+appId: com.hydroteam.reedance.studio
+productName: Reedance Studio
+copyright: Copyright © 2026 HYDRO team
+
+directories:
+  buildResources: build
+  output: release
+
+# `contracts/` is shipped read-only next to the bundle: the main process
+# validates drafts and lessons against those JSON Schemas at runtime, with no
+# network access. `node_modules` is included automatically for production
+# dependencies because the main bundle keeps its packages external.
+files:
+  - dist/**/*
+  - contracts/**/*
+  - package.json
+  - "!**/*.map"
+  - "!**/*.ts"
+
+asar: true
+asarUnpack:
+  - dist/main/sql-wasm.wasm
+
+extraMetadata:
+  main: dist/main/index.js
+  description: Reedance Content Studio — import content drafts, sync lyrics to locally selected audio, review, and export encrypted .rdpack bundles with a signed latest.json.
+  homepage: https://github.com/khodehydro/reedance
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: Reedance-Studio-Setup-${version}-${arch}.${ext}
+  legalTrademarks: HYDRO team
+  verifyUpdateCodeSignature: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Reedance Studio
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+  menuCategory: false
+  artifactName: Reedance-Studio-Setup-${version}-${arch}.${ext}
+
+linux:
+  icon: build/icon.png
+  category: AudioVideo
+
+publish: null

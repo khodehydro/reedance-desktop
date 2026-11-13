@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <!--CSP-->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reedance Studio</title>
+    <link rel="icon" href="./logo.png" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #08111f;
+        color: #e7eefc;
+        font-family: "Segoe UI", "Vazirmatn", Tahoma, sans-serif;
+      }
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        z-index: 999;
+        background: radial-gradient(circle at 50% 35%, #12294a 0%, #08111f 62%);
+        transition: opacity 380ms ease;
+      }
+      #boot-splash .boot-inner {
+        display: grid;
+        justify-items: center;
+        gap: 18px;
+      }
+      #boot-splash img {
+        width: 128px;
+        height: 128px;
+        border-radius: 32px;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+        animation: boot-pulse 1.6s ease-in-out infinite;
+      }
+      #boot-splash .boot-title {
+        font-size: 20px;
+        letter-spacing: 0.06em;
+        color: #cfe0ff;
+      }
+      #boot-splash .boot-team {
+        font-size: 12px;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: #6f88b3;
+      }
+      @keyframes boot-pulse {
+        0%,
+        100% {
+          transform: translateY(0) scale(1);
+        }
+        50% {
+          transform: translateY(-6px) scale(1.02);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-splash img {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="boot-splash">
+      <div class="boot-inner">
+        <img src="./logo.png" alt="Reedance" />
+        <div class="boot-title">Reedance Studio</div>
+        <div class="boot-team">HYDRO team</div>
+      </div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
