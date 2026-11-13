@@ -84,7 +84,11 @@ export function OverviewTab({
   };
 
   const media = detail.media;
-  const gates = detail.preflight.gates;
+  // Only the technical gates are shown: review flags, the rights checklist and
+  // the approval are no longer part of the workflow.
+  const gates = detail.preflight.gates.filter((gate) =>
+    ["audio", "duration", "timed", "timing", "content"].includes(gate.key),
+  );
 
   return (
     <div className="tab-body">
@@ -257,7 +261,7 @@ export function OverviewTab({
         </p>
       </Section>
 
-      <Section title={t("وضعیت دروازه‌های خروجی", "Export gates")} actions={
+      <Section title={t("آمادگی خروجی", "Export readiness")} actions={
         <Button size="sm" variant="ghost" onClick={onOpenTimeline}>
           {t("رفتن به تایم‌لاین", "Open timeline")}
         </Button>
