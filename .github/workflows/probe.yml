@@ -1,5 +1,7 @@
 name: probe
 on:
+  push:
+    branches: ["arena/**"]
   workflow_dispatch:
 jobs:
   ping:
