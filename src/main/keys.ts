@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { safeStorage } from "electron";
+import type { SafeStorage } from "electron";
 import type { KeyRecord } from "../shared/types";
 import { fromBase64Url, sha256Hex, toBase64Url } from "./crypto/pack";
 import { ed25519PrivateKeyFromSeed, ed25519PublicKeyRaw, generateSigningKeyPair } from "./crypto/sign";
@@ -39,17 +39,27 @@ function keystorePath(): string {
   return path.join(keysDir(), "keystore.json");
 }
 
+function osKeystore(): SafeStorage | null {
+  try {
+    const loaded = require("electron") as { safeStorage?: SafeStorage };
+    return loaded.safeStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function encryptionAvailable(): boolean {
   try {
-    return safeStorage.isEncryptionAvailable();
+    return osKeystore()?.isEncryptionAvailable() ?? false;
   } catch {
     return false;
   }
 }
 
 function protect(raw: Buffer): { secret: string; protection: StoredKey["protection"] } {
-  if (encryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(raw.toString("base64"));
+  const keystore = osKeystore();
+  if (keystore && encryptionAvailable()) {
+    const encrypted = keystore.encryptString(raw.toString("base64"));
     return { secret: encrypted.toString("base64"), protection: "safeStorage" };
   }
   return { secret: raw.toString("base64"), protection: "none" };
@@ -57,7 +67,9 @@ function protect(raw: Buffer): { secret: string; protection: StoredKey["protecti
 
 function unprotect(key: StoredKey): Buffer {
   if (key.protection === "safeStorage") {
-    const decoded = safeStorage.decryptString(Buffer.from(key.secret, "base64"));
+    const keystore = osKeystore();
+    if (!keystore) throw new Error("the operating system keystore is unavailable; import the key again");
+    const decoded = keystore.decryptString(Buffer.from(key.secret, "base64"));
     return Buffer.from(decoded, "base64");
   }
   return Buffer.from(key.secret, "base64");

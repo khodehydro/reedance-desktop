@@ -1,4 +1,4 @@
-import { app } from "electron";
+import type { App } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -15,8 +15,17 @@ import path from "node:path";
  * The archive folder can be relocated from Settings; nothing is stored in the
  * installer, the repository, or the renderer profile.
  */
+function electronApp(): App {
+  // Required lazily: tests and the packaging scripts exercise the domain layer
+  // in plain Node, where the `electron` module exists but has no running app.
+  const loaded = require("electron") as { app: App };
+  return loaded.app;
+}
+
 export function studioRoot(): string {
-  return path.join(app.getPath("userData"), "studio");
+  const override = process.env.REEDANCE_STUDIO_ROOT;
+  if (override && override.trim()) return path.resolve(override);
+  return path.join(electronApp().getPath("userData"), "studio");
 }
 
 export function ensureDirs(): void {

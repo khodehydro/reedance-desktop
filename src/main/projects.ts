@@ -492,10 +492,13 @@ export interface CreateProjectInput {
 
 export function createProject(input: CreateProjectInput): string {
   const { draft } = input;
-  const existing = get<{ project_id: string }>("SELECT project_id FROM projects WHERE song_id = ? AND target_language = ?", [
-    draft.songId,
-    draft.targetLanguage,
-  ]);
+  // `projects` has no language column: a songId is pinned to one language in
+  // `songs`, so the duplicate check must join through it.
+  const existing = get<{ project_id: string }>(
+    `SELECT p.project_id FROM projects p JOIN songs s ON s.song_id = p.song_id
+      WHERE p.song_id = ? AND s.target_language = ?`,
+    [draft.songId, draft.targetLanguage],
+  );
   if (existing) {
     throw new Error(`a project for songId "${draft.songId}" (${draft.targetLanguage}) already exists; open it instead of importing twice`);
   }
@@ -644,6 +647,11 @@ export function saveRights(projectId: string, rights: RightsChecklist): ProjectD
 export function saveMedia(projectId: string, media: MediaInfo, resetReview: boolean): void {
   const timestamp = nowIso();
   transaction(() => {
+    const previousAudio = get<{ audio_sha256: string }>(
+      "SELECT audio_sha256 FROM project_media WHERE project_id = ?",
+      [projectId],
+    );
+    const audioChanged = !!previousAudio && previousAudio.audio_sha256 !== media.audioSha256;
     run(
       `INSERT INTO project_media(project_id, audio_copy_path, audio_source_name, audio_sha256, mime_type, extension, duration_ms, bytes,
         cover_copy_path, cover_sha256, cover_mime_type, cover_extension, cover_bytes, imported_at)
@@ -680,8 +688,15 @@ export function saveMedia(projectId: string, media: MediaInfo, resetReview: bool
       ],
     );
     if (resetReview) {
-      run("UPDATE lyric_marks SET reviewed_audio_sha = NULL, reviewed_line_sha = NULL WHERE project_id = ?", [projectId]);
-      invalidateApproval(projectId, "audio replaced");
+      if (audioChanged) {
+        // Different audio means the old millisecond positions no longer point
+        // at the same syllables, so they are not just "unreviewed" — they are
+        // gone. The operator re-syncs against the new waveform.
+        run("DELETE FROM lyric_marks WHERE project_id = ?", [projectId]);
+      } else {
+        run("UPDATE lyric_marks SET reviewed_audio_sha = NULL, reviewed_line_sha = NULL WHERE project_id = ?", [projectId]);
+      }
+      invalidateApproval(projectId, audioChanged ? "audio replaced" : "audio re-imported");
     }
     run("UPDATE projects SET updated_at = ? WHERE project_id = ?", [timestamp, projectId]);
     audit(projectId, resetReview ? "audio-imported" : "media-updated", "operator", {
@@ -774,9 +789,20 @@ export function setReviewed(projectId: string, lineIds: string[], reviewed: bool
   return getProjectDetail(projectId);
 }
 
+/**
+ * Gates that must hold *before* a human can record an approval.
+ *
+ * `approved` and `approval-current` are deliberately excluded: they describe
+ * the approval that is about to be created, so including them would make
+ * approval impossible. The export path keeps using the full `preflight`.
+ */
+export const PRE_APPROVAL_GATES = ["audio", "duration", "timed", "timing", "reviewed", "content", "rights"] as const;
+
 export function approveProject(projectId: string, approver: string, note: string): ProjectDetail {
   const report = preflight(projectId);
-  const blocking = report.gates.filter((gate) => !gate.ok);
+  const blocking = report.gates.filter(
+    (gate) => !gate.ok && (PRE_APPROVAL_GATES as readonly string[]).includes(gate.key),
+  );
   if (blocking.length) {
     throw new Error(`approval blocked: ${blocking.map((gate) => `${gate.labelEn} (${gate.detail})`).join("; ")}`);
   }

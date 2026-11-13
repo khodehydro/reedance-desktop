@@ -167,7 +167,9 @@ const MIGRATIONS: string[] = [
 export async function openDatabase(): Promise<void> {
   ensureDirs();
   const SQL = await initSqlJs({
-    locateFile: (file) => path.join(__dirname, file),
+    // The packaged app keeps the wasm beside the bundle; tests point at the
+    // copy inside node_modules with REEDANCE_SQL_WASM_DIR.
+    locateFile: (file) => path.join(process.env.REEDANCE_SQL_WASM_DIR ?? __dirname, file),
   });
   const file = dbFile();
   if (fs.existsSync(file)) {

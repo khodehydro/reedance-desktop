@@ -11,3 +11,5 @@ Thumbs.db
 *.local
 coverage/
 .arena/
+
+.transport/

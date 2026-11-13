@@ -9,11 +9,15 @@ concurrency:
   group: build-windows-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   windows-installer:
     name: Windows NSIS installer (x64)
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
+    if: ${{ !startsWith(github.event.head_commit.message || '', 'ci:') }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.cache\electron-builder
@@ -50,6 +54,27 @@ jobs:
         run: |
           Get-ChildItem -Path release -File | Select-Object Name, Length | Format-Table -AutoSize
           Get-FileHash -Path release/*.exe -Algorithm SHA256 | Format-List
+
+      - name: Publish release with the installer
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="build-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" release/*.exe --title "Reedance Studio ${tag}" \
+            --notes "Unsigned NSIS installer built from ${GITHUB_SHA}. Windows SmartScreen will warn; verify the SHA-256 next to the file."
+
+      - name: Transport chunks for branch download
+        if: github.ref_name == 'arena/132cfe2a-reedance-desktop'
+        shell: bash
+        run: |
+          node scripts/split-artifact.mjs
+          git config user.name "reedance-ci"
+          git config user.email "ci@users.noreply.github.com"
+          git add -f .transport
+          git commit -m "ci: installer transport (chunks only)"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
