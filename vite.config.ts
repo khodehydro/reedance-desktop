@@ -47,6 +47,10 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: true,
+    // The browser preview is served through a proxied *.e2b.app host, so the
+    // dev server must accept it instead of rejecting unknown Host headers.
+    allowedHosts: true,
+    cors: true,
   },
   build: {
     outDir: path.resolve(__dirname, "dist/renderer"),
