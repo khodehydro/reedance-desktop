@@ -17,7 +17,7 @@ jobs:
     name: Windows NSIS installer (x64)
     runs-on: windows-latest
     timeout-minutes: 60
-    if: ${{ !startsWith(github.event.head_commit.message || '', 'ci:') }}
+    if: ${{ !startsWith(github.event.head_commit.message || '', 'transport:') }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.cache\electron-builder
@@ -73,7 +73,7 @@ jobs:
           git config user.name "reedance-ci"
           git config user.email "ci@users.noreply.github.com"
           git add -f .transport
-          git commit -m "ci: installer transport (chunks only)"
+          git commit -m "transport: installer chunks (download only)"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload installer
