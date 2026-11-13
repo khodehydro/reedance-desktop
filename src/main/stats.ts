@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import type { ExportSummary, LanguageStats, StatsReport, StatsScope, TargetLanguage } from "../shared/types";
+import { SUPPORTED_LANGUAGES, type ExportSummary, type LanguageStats, type StatsReport, type StatsScope, type TargetLanguage } from "../shared/types";
 import { all, get } from "./db";
 import { exportSummaries, readContent, type ProjectRow } from "./projects";
 import { canonicalJson, nowIso, sha256Hex } from "./util";
@@ -14,7 +14,7 @@ import { canonicalJson, nowIso, sha256Hex } from "./util";
  * - lexeme rows and counts are aggregated separately to avoid joins that
  *   multiply sums.
  */
-const LANGUAGES: TargetLanguage[] = ["en", "es", "ko"];
+const LANGUAGES: TargetLanguage[] = [...SUPPORTED_LANGUAGES];
 
 interface CountRow {
   export_id: string;

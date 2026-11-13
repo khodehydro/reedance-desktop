@@ -21,7 +21,7 @@ const MIGRATIONS: string[] = [
 
   CREATE TABLE songs(
     song_id TEXT PRIMARY KEY,
-    target_language TEXT NOT NULL CHECK(target_language IN ('en','es','ko')),
+    target_language TEXT NOT NULL CHECK(target_language IN ('en','es','ko','tr')),
     title TEXT NOT NULL,
     artist TEXT NOT NULL,
     created_at TEXT NOT NULL
@@ -162,6 +162,21 @@ const MIGRATIONS: string[] = [
   CREATE INDEX idx_lexemes_lang_key ON export_lexemes(target_language, normalized_key);
   CREATE INDEX idx_audit_entity ON audit_events(entity_id, at DESC);
   `,
+
+  /* v2 — Turkish support (studio extension) on databases created by v1. */
+  `
+  CREATE TABLE songs_next(
+    song_id TEXT PRIMARY KEY,
+    target_language TEXT NOT NULL CHECK(target_language IN ('en','es','ko','tr')),
+    title TEXT NOT NULL,
+    artist TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  INSERT INTO songs_next(song_id, target_language, title, artist, created_at)
+    SELECT song_id, target_language, title, artist, created_at FROM songs;
+  DROP TABLE songs;
+  ALTER TABLE songs_next RENAME TO songs;
+  `,
 ];
 
 export async function openDatabase(): Promise<void> {
@@ -185,16 +200,24 @@ export async function openDatabase(): Promise<void> {
 function migrate(): void {
   const database = requireDb();
   const current = (database.exec("PRAGMA user_version;")[0]?.values[0]?.[0] as number) ?? 0;
-  for (let version = current; version < MIGRATIONS.length; version += 1) {
-    database.exec("BEGIN;");
-    try {
-      database.exec(MIGRATIONS[version]);
-      database.exec(`PRAGMA user_version = ${version + 1};`);
-      database.exec("COMMIT;");
-    } catch (error) {
-      database.exec("ROLLBACK;");
-      throw error;
+  // Table rebuilds (the v2 language CHECK) need the parent table to be
+  // droppable; `PRAGMA foreign_keys` is a no-op inside a transaction, so it is
+  // toggled around the whole migration run and restored afterwards.
+  database.exec("PRAGMA foreign_keys = OFF;");
+  try {
+    for (let version = current; version < MIGRATIONS.length; version += 1) {
+      database.exec("BEGIN;");
+      try {
+        database.exec(MIGRATIONS[version]);
+        database.exec(`PRAGMA user_version = ${version + 1};`);
+        database.exec("COMMIT;");
+      } catch (error) {
+        database.exec("ROLLBACK;");
+        throw error;
+      }
     }
+  } finally {
+    database.exec("PRAGMA foreign_keys = ON;");
   }
   if (current < MIGRATIONS.length) {
     database.run("INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)", [

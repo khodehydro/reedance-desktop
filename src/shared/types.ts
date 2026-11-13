@@ -6,7 +6,44 @@
  * The content shapes mirror `contracts/v1/*.schema.json` (Reedance v1).
  */
 
-export type TargetLanguage = "en" | "es" | "ko";
+/**
+ * Languages the studio can build packs for.
+ *
+ * `tr` is a studio-side extension: the pinned v1 contract
+ * (`contracts/v1/lesson.schema.json`) only lists `en`, `es`, `ko`, while the
+ * content pipeline already ships Turkish drafts. Turkish projects are therefore
+ * accepted and exported, but flagged with a warning everywhere so nobody
+ * publishes them to an Android build that still pins the older enum.
+ */
+export const SUPPORTED_LANGUAGES = ["en", "es", "ko", "tr"] as const;
+export type TargetLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+
+export interface LanguageMeta {
+  fa: string;
+  en: string;
+  native: string;
+  locale: string;
+  flag: string;
+  experimental?: boolean;
+}
+
+export const LANGUAGE_META: Record<TargetLanguage, LanguageMeta> = {
+  en: { fa: "انگلیسی", en: "English", native: "English", locale: "en-GB", flag: "EN" },
+  es: { fa: "اسپانیایی", en: "Spanish", native: "Español", locale: "es-ES", flag: "ES" },
+  ko: { fa: "کره‌ای", en: "Korean", native: "한국어", locale: "ko-KR", flag: "KO" },
+  tr: {
+    fa: "ترکی استانبولی",
+    en: "Turkish",
+    native: "Türkçe",
+    locale: "tr-TR",
+    flag: "TR",
+    experimental: true,
+  },
+};
+
+export function isTargetLanguage(value: unknown): value is TargetLanguage {
+  return typeof value === "string" && (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
+}
 export type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 export type Tone = "blue" | "mint" | "amber" | "coral" | "rose" | "apricot";
 export type CellDir = "auto" | "ltr" | "rtl";

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { DraftContent, ImportOutcome, Issue, Level, TargetLanguage } from "../shared/types";
+import { SUPPORTED_LANGUAGES, isTargetLanguage, type DraftContent, type ImportOutcome, type Issue, type Level, type TargetLanguage } from "../shared/types";
 import { audit, flushNow } from "./db";
 import { readFileLimited } from "./paths";
 import { createProject, saveRawSnapshot } from "./projects";
@@ -70,7 +70,7 @@ export function importDraftFile(filePath: string): ImportOutcome {
 }
 
 const SONG_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const LOCALE = /^(?:en|es|ko)(?:-[A-Za-z0-9]{2,8}){1,3}$/;
+const LOCALE = new RegExp(`^(?:${SUPPORTED_LANGUAGES.join("|")})(?:-[A-Za-z0-9]{2,8}){1,3}$`);
 
 export function createEmptyDraft(input: {
   songId: string;

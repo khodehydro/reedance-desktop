@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AppInfo, LibraryData, Settings, TargetLanguage } from "@shared/types";
+import { LANGUAGE_META, SUPPORTED_LANGUAGES, type AppInfo, type LibraryData, type Settings, type TargetLanguage } from "@shared/types";
 import { api, isMock } from "./api";
 import { LangContext, type Lang } from "./i18n";
 import { LibraryPage } from "./components/LibraryPage";
@@ -34,7 +34,9 @@ const EMPTY_LIBRARY: LibraryData = {
   counts: { songs: 0, projects: 0, exports: 0, published: 0, missing: 0 },
 };
 
-const LOCALES: Record<TargetLanguage, string> = { en: "en-GB", es: "es-ES", ko: "ko-KR" };
+const LOCALES: Record<TargetLanguage, string> = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map((language) => [language, LANGUAGE_META[language].locale]),
+) as Record<TargetLanguage, string>;
 
 function AppInner(): React.ReactElement {
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -388,11 +390,10 @@ function NewProjectModal({
           <Select
             value={language}
             onChange={(value) => setLanguage(value)}
-            options={[
-              { value: "en", label: "English (en)" },
-              { value: "es", label: "Español (es)" },
-              { value: "ko", label: "한국어 (ko)" },
-            ]}
+            options={SUPPORTED_LANGUAGES.map((item) => ({
+              value: item,
+              label: `${LANGUAGE_META[item].native} (${item})${LANGUAGE_META[item].experimental ? " · beta" : ""}`,
+            }))}
           />
         </Field>
         <Field label="Locale" hint="pronunciation/typography hint">

@@ -8,6 +8,13 @@ together with a signed `latest.json` — exactly as described by
 [`WINDOWS_AGENT.md`](https://github.com/khodehydro/reedance/blob/arena/e6a6294d-reedance/docs/architecture/WINDOWS_AGENT.md)
 and [`PACKAGE_V1.md`](https://github.com/khodehydro/reedance/blob/arena/e6a6294d-reedance/docs/architecture/PACKAGE_V1.md).
 
+Supported target languages: **en**, **es**, **ko** and **tr**. Turkish is a
+studio-side extension over the pinned v1 contract (`contracts/` still lists
+`en/es/ko`, and the vendored schemas stay byte-identical — the extension is
+applied in memory in `src/main/validation.ts`). Turkish projects are importable
+and exportable today and are flagged in the UI so they are only published to an
+Android build that accepts `tr`.
+
 The UI is Persian-first with a full English switch, RTL, blue/white, and uses
 the repository `logo.png` as window icon, sidebar mark, splash logo and
 installer icon. The splash screen is signed "HYDRO team".

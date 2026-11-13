@@ -10,6 +10,7 @@ import type {
   StatsScope,
   TargetLanguage,
 } from "../shared/types";
+import { SUPPORTED_LANGUAGES, isTargetLanguage } from "../shared/types";
 import { CH } from "../shared/ipc";
 import { all, audit, flushNow } from "./db";
 import { rescanArchive, stageExport } from "./archive";
@@ -189,7 +190,7 @@ export function registerIpc(): void {
   ipcMain.handle(CH.projectCreate, (_event, input: unknown) => {
     const value = obj(input, "input");
     const language = str(value.targetLanguage, "targetLanguage", 2);
-    if (!["en", "es", "ko"].includes(language)) throw new Error("targetLanguage must be en, es or ko");
+    if (!isTargetLanguage(language)) throw new Error(`targetLanguage must be one of: ${SUPPORTED_LANGUAGES.join(", ")}`);
     if (!["A1", "A2", "B1", "B2", "C1", "C2"].includes(str(value.level, "level", 2))) {
       throw new Error("level must be A1..C2");
     }
@@ -417,12 +418,13 @@ export function registerIpc(): void {
     const allowed = ["latest-published", "latest-exported", "drafts", "all-versions"];
     if (!allowed.includes(str(value.scope, "scope", 32))) throw new Error("unknown stats scope");
     const language = value.targetLanguage;
-    if (language !== undefined && !["en", "es", "ko", "all"].includes(str(language, "targetLanguage", 3))) {
+    const requestedLanguage = language === undefined ? "all" : str(language, "targetLanguage", 3);
+    if (requestedLanguage !== "all" && !isTargetLanguage(requestedLanguage)) {
       throw new Error("unknown target language");
     }
     return computeStats({
       scope: str(value.scope, "scope", 32) as StatsScope["scope"],
-      targetLanguage: (language as StatsScope["targetLanguage"]) ?? "all",
+      targetLanguage: requestedLanguage as StatsScope["targetLanguage"],
     });
   });
 

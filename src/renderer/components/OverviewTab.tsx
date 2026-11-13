@@ -154,11 +154,17 @@ export function OverviewTab({
               onChange={(value) => update((draft) => void (draft.artist = value))}
             />
           </Field>
-          <Field label="level">
+          <Field
+            label="level"
+            hint={content.level ? undefined : t("در پیش‌نویس تعیین نشده؛ قبل از خروجی یکی را انتخاب کنید", "not set in the draft; choose one before export")}
+          >
             <Select
-              value={content.level ?? "A1"}
-              onChange={(value) => update((draft) => void (draft.level = value))}
-              options={(["A1", "A2", "B1", "B2", "C1", "C2"] as const).map((item) => ({ value: item, label: item }))}
+              value={content.level ?? ""}
+              onChange={(value) => update((draft) => void (draft.level = value === "" ? undefined : value))}
+              options={[
+                ...(content.level ? [] : [{ value: "" as const, label: t("— انتخاب کنید —", "— choose —") }]),
+                ...(["A1", "A2", "B1", "B2", "C1", "C2"] as const).map((item) => ({ value: item, label: item })),
+              ]}
             />
           </Field>
           <Field label="locale" hint={t("مثل en-GB یا es-ES", "e.g. en-GB or es-ES")}>

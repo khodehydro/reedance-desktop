@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import type { StatsReport, StatsScope, TargetLanguage } from "@shared/types";
+import { LANGUAGE_META, SUPPORTED_LANGUAGES, type StatsReport, type StatsScope, type TargetLanguage } from "@shared/types";
 import { api } from "../api";
 import { useLang } from "../i18n";
 import { formatDate } from "../format";
@@ -115,9 +115,10 @@ export function StatsPage(): React.ReactElement {
               onChange={setLanguage}
               options={[
                 { value: "all", label: t("همه", "all") },
-                { value: "en", label: "English" },
-                { value: "es", label: "Español" },
-                { value: "ko", label: "한국어" },
+                ...SUPPORTED_LANGUAGES.map((item) => ({
+                  value: item,
+                  label: `${LANGUAGE_META[item].native}${LANGUAGE_META[item].experimental ? t(" · آزمایشی", " · beta") : ""}`,
+                })),
               ]}
             />
           </Field>

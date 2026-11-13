@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Ajv2020, { type ErrorObject, type ValidateFunction } from "ajv/dist/2020";
 import addFormats from "ajv-formats";
-import type { DraftContent, Issue, Lesson, Question } from "../shared/types";
+import { SUPPORTED_LANGUAGES, type DraftContent, type Issue, type Lesson, type Question } from "../shared/types";
 
 /**
  * JSON Schema + semantic validation for the v1 contract.
@@ -27,6 +27,41 @@ function loadSchema(name: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
 }
 
+/** `^(?:en|es|ko)` style prefix used by the locale and lexemeId patterns. */
+const LANGUAGE_PREFIX_PATTERN = `(?:${SUPPORTED_LANGUAGES.join("|")})`;
+
+/**
+ * Widen the vendored v1 schemas to the languages the studio supports.
+ *
+ * The `contracts/` copies stay byte-identical to the upstream repository so
+ * they can be diffed and audited; the (single) Turkish extension is applied in
+ * memory instead, next to the validation code that owns it. Without this every
+ * field of a `tr` draft fails with "must be equal to one of the allowed values".
+ */
+function extendContractLanguages(schema: Record<string, unknown>): Record<string, unknown> {
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (!node || typeof node !== "object") return;
+    const record = node as Record<string, unknown>;
+    for (const [key, value] of Object.entries(record)) {
+      if (key === "enum" && Array.isArray(value) && value.length === 3 && ["en", "es", "ko"].every((lang) => value.includes(lang))) {
+        record[key] = [...SUPPORTED_LANGUAGES];
+        continue;
+      }
+      if (typeof value === "string" && value.includes("?:en|es|ko")) {
+        record[key] = value.split("^(?:en|es|ko)").join(`^(?:${SUPPORTED_LANGUAGES.join("|")})`);
+        continue;
+      }
+      visit(value);
+    }
+  };
+  visit(schema);
+  return schema;
+}
+
 function ensureAjv(): void {
   if (ajv) return;
   const instance = new Ajv2020({
@@ -36,8 +71,8 @@ function ensureAjv(): void {
     validateFormats: true,
   });
   addFormats(instance);
-  const lessonSchema = loadSchema("lesson.schema.json");
-  const draftSchema = loadSchema("draft.schema.json");
+  const lessonSchema = extendContractLanguages(loadSchema("lesson.schema.json"));
+  const draftSchema = extendContractLanguages(loadSchema("draft.schema.json"));
   instance.addSchema(lessonSchema, "urn:reedance:lesson:v1");
   instance.addSchema(draftSchema, "urn:reedance:draft:v1");
   lessonValidator = instance.getSchema("urn:reedance:lesson:v1") ?? instance.compile(lessonSchema);
@@ -90,7 +125,7 @@ export function normalizeAnswer(value: string): string {
 }
 
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const LEXEME_RE = /^(?:en|es|ko):[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const LEXEME_RE = new RegExp(`^${LANGUAGE_PREFIX_PATTERN}:[a-z0-9]+(?:-[a-z0-9]+)*$`);
 
 function duplicateIds(prefix: string, items: { id: string }[]): Issue[] {
   const seen = new Set<string>();

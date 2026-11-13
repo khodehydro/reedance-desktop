@@ -294,10 +294,22 @@ function projectIssues(row: ProjectRow, content: DraftContent, media: MediaInfo 
     errors.push({ path: "artist", message: "artist is required before export", severity: "error" });
   }
   if (!content.level) {
-    errors.push({ path: "level", message: "level is required before export", severity: "error" });
+    errors.push({
+      path: "level",
+      message: "level is not set: choose A1–C2 in the overview tab before export",
+      severity: "error",
+    });
   }
   if (!media) {
     warnings.push({ path: "media", message: "no audio selected yet; timeline sync and export are locked", severity: "warning" });
+  }
+  if (content.targetLanguage === "tr") {
+    warnings.push({
+      path: "targetLanguage",
+      message:
+        "Turkish (tr) is a studio extension: contract v1 pins en/es/ko, so publish these packs only to an Android build that accepts tr",
+      severity: "warning",
+    });
   }
   void row;
   return { errors, warnings };

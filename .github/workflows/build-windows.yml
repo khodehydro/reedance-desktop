@@ -70,7 +70,7 @@ jobs:
       # installer in chunks via the repository variable REEDANCE_TRANSPORT=on.
       # Normal builds only publish the release.
       - name: Transport chunks for branch download
-        if: github.ref_name == 'arena/132cfe2a-reedance-desktop' && vars.REEDANCE_TRANSPORT == 'on'
+        if: github.ref_name == 'arena/132cfe2a-reedance-desktop' && (vars.REEDANCE_TRANSPORT == 'on' || contains(github.event.head_commit.message, '[transport]'))
         shell: bash
         run: |
           node scripts/split-artifact.mjs

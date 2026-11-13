@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import type { AppInfo, ExportSummary, LibraryData, ProjectSummary, TargetLanguage } from "@shared/types";
+import { LANGUAGE_META, SUPPORTED_LANGUAGES, type AppInfo, type ExportSummary, type LibraryData, type ProjectSummary, type TargetLanguage } from "@shared/types";
 import { api } from "../api";
 import { useLang } from "../i18n";
 import { formatBytes, formatDate, formatSeconds, shortHash, versionLabel } from "../format";
@@ -7,9 +7,12 @@ import { Badge, Button, Callout, Empty, Mono, Progress, Section, useToast } from
 
 const LANGUAGES: { id: TargetLanguage | "all"; fa: string; en: string; flag: string }[] = [
   { id: "all", fa: "همه", en: "All", flag: "◍" },
-  { id: "en", fa: "انگلیسی", en: "English", flag: "EN" },
-  { id: "es", fa: "اسپانیایی", en: "Spanish", flag: "ES" },
-  { id: "ko", fa: "کره‌ای", en: "Korean", flag: "KO" },
+  ...SUPPORTED_LANGUAGES.map((id) => ({
+    id,
+    fa: LANGUAGE_META[id].fa,
+    en: LANGUAGE_META[id].en,
+    flag: LANGUAGE_META[id].flag,
+  })),
 ];
 
 const STATE_LABEL: Record<ProjectSummary["state"], { fa: string; en: string; tone: "muted" | "info" | "warn" | "ok" }> = {
