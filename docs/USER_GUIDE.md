@@ -2,13 +2,13 @@
 
 ## نصب
 
-1. فایل `Reedance-Studio-Setup-1.0.1-x64.exe` را اجرا کنید.
+1. فایل `Reedance-Studio-Setup-1.0.2-x64.exe` را اجرا کنید.
 2. چون فایل با گواهی تجاری امضا نشده است، ویندوز SmartScreen هشدار می‌دهد: **More info → Run anyway**.
 3. مسیر نصب را انتخاب کنید (نصب برای کاربر جاری، بدون نیاز به دسترسی مدیر).
 4. میان‌بر روی دسکتاپ و منوی استارت ساخته می‌شود.
 
-نسخهٔ فایل: `1.0.1` — SHA-256:
-`f5fcfa6596bfad092244037b9fff3897ad8fa32dc5a39454ac8553c69a859119`
+نسخهٔ فایل: `1.0.2` — SHA-256:
+`c6b9fdb56f3352835a5063417f14c96fa9c26407c978b3b662958321e4a5f1df`
 
 ## زبان‌ها
 
@@ -48,7 +48,7 @@
 
 # Reedance Studio — user guide (English)
 
-Install `Reedance-Studio-Setup-1.0.1-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
+Install `Reedance-Studio-Setup-1.0.2-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
 
 The pipeline is deliberately linear: import a content-only `.rddraft.json`, pick the audio from your machine, mark every lyric line on the waveform, then press **Get the output file**. Keys are generated and protected by the app; there is no key picker and no approval ceremony. Export is only blocked by a missing audio file, an unmeasured duration or untimed lines. Replacing the audio clears the marks so stale timings can never be exported. Theme: ☾/☀ in the top bar (dark, light, system).
 
