@@ -74,6 +74,9 @@ const api: StudioApi = {
     generateTest: () => ipcRenderer.invoke(CH.keysGenerateTest),
     importFromFile: () => ipcRenderer.invoke(CH.keysImport),
     backup: (passphrase) => ipcRenderer.invoke(CH.keysBackup, passphrase),
+    password: () => ipcRenderer.invoke(CH.keysPassword),
+    setPassword: (password) => ipcRenderer.invoke(CH.keysSetPassword, password),
+    rotatePassword: () => ipcRenderer.invoke(CH.keysRotatePassword),
   },
   stats: {
     get: (scope) => ipcRenderer.invoke(CH.statsGet, scope),

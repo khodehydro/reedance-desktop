@@ -30,7 +30,9 @@
 اگر صوت را عوض کنید، همهٔ زمان‌ها پاک می‌شوند و باید دوباره سینک کنید؛ این رفتار عمدی است.
 ظاهر برنامه از دکمهٔ ☾/☀ بالای صفحه بین تیره، روشن و «مطابق سیستم» جابه‌جا می‌شود.
 
-## کلیدها
+## رمز فایل‌ها
+
+کل ماجرا یک رمز است: «تنظیمات → رمز فایل‌ها». همان رمز را یک‌بار در اپ اندروید وارد می‌کنید (و در Keystore دستگاه نگه می‌دارید) تا فایل‌های `.rdpack` باز شوند. رمز هیچ‌وقت داخل APK نوشته نمی‌شود، چون هر چیزی که در APK باشد با مهندسی معکوس قابل استخراج است. جزئیات فنی در `docs/CRYPTO.md`.
 
 کلیدها کاملاً خودکار هستند: در اولین اجرا ساخته می‌شوند، در پروفایل ویندوز با DPAPI محافظت می‌شوند و برای همهٔ خروجی‌ها دوباره استفاده می‌شوند. هیچ انتخابی لازم نیست. تنها نکته: اگر پروفایل ویندوز پاک شود، بسته‌های قبلی دیگر با همان کلید تأیید نمی‌شوند.
 
@@ -63,5 +65,7 @@ must only be published to an Android build that accepts `tr`. Drafts without a
 export unlocks.
 
 Long songs: use **Distribute N lines** (timeline or export tab) to lay a starting grid over the audio, then nudge only the lines that need it. The export error now lists only the technical reasons (audio, duration, timings, content), never review or approval.
+
+One secret, no key management: the **file password** shown in Settings (and after every export) is what the Android app asks for once; the AES key is derived from it with PBKDF2-HMAC-SHA256 (200 000 rounds, `reedance-pack-v1`) so nothing has to be baked into the APK. See `docs/CRYPTO.md`.
 
 Keyboard: `Space` play/pause, `M` capture a mark and advance, `←/→` ±100 ms (`Shift` ±1 s), `J/K` previous/next line, `A/B` loop points.

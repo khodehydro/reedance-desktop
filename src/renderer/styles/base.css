@@ -1513,3 +1513,36 @@ code,
 [data-theme="light"] .muted {
   color: var(--muted);
 }
+
+/* ------------------------------ pack password ------------------------------ */
+
+.password-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(95, 176, 255, 0.06);
+}
+
+.password-value {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.password-value .mono-inline,
+.password-value code {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+}
+
+.password-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}

@@ -39,6 +39,63 @@ function keystorePath(): string {
   return path.join(keysDir(), "keystore.json");
 }
 
+/**
+ * One password per studio profile.
+ *
+ * The `.rdpack` AES-256 key is derived from this password, so the operator only
+ * ever handles a single string: the one they also enter in the Android app.
+ * The password is never embedded in the APK — putting it there would make it
+ * recoverable by reverse engineering — it is typed once into the app and kept in
+ * the Android keystore.
+ *
+ * Derivation (also implemented by the Android reader):
+ *   key = PBKDF2-HMAC-SHA256(password = NFKC(password).trim(),
+ *                            salt     = "reedance-pack-v1",
+ *                            rounds   = 200000,
+ *                            length   = 32)
+ * The pack header keeps the same `keyId` field with the fixed value `enc-main`.
+ */
+export const PACK_KEY_ID = "enc-main";
+export const PACK_PASSWORD_SALT = "reedance-pack-v1";
+export const PACK_PASSWORD_ITERATIONS = 200_000;
+
+function passwordPath(): string {
+  return path.join(keysDir(), "pack-password.txt");
+}
+
+/** Human-friendly, unambiguous 20-char secret (no 0/o/1/l/i). */
+export function generatePackPassword(): string {
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = crypto.randomBytes(20);
+  let raw = "";
+  for (const byte of bytes) raw += alphabet[byte % alphabet.length];
+  return raw.replace(/(.{5})(?=.)/g, "$1-");
+}
+
+export function getPackPassword(): string {
+  try {
+    const stored = fs.readFileSync(passwordPath(), "utf8").trim();
+    if (stored.length >= 12) return stored;
+  } catch {
+    // First run (or a deleted file): a password is generated below.
+  }
+  const generated = generatePackPassword();
+  writeFileAtomic(passwordPath(), `${generated}\n`, 0o600);
+  return generated;
+}
+
+export function setPackPassword(next: string): string {
+  const value = next.normalize("NFKC").trim();
+  if (value.length < 12) throw new Error("the pack password must be at least 12 characters");
+  if (value.length > 128) throw new Error("the pack password must be at most 128 characters");
+  writeFileAtomic(passwordPath(), `${value}\n`, 0o600);
+  return value;
+}
+
+export function derivePackKey(password: string): Buffer {
+  return crypto.pbkdf2Sync(password.normalize("NFKC").trim(), PACK_PASSWORD_SALT, PACK_PASSWORD_ITERATIONS, 32, "sha256");
+}
+
 function osKeystore(): SafeStorage | null {
   try {
     const loaded = require("electron") as { safeStorage?: SafeStorage };
@@ -170,23 +227,10 @@ export function generateTestKeys(): KeyRecord[] {
 export function ensureStudioKeys(): { encryptionKeyId: string; signatureKeyId: string } {
   const file = load();
   let changed = false;
-  let enc = file.keys.find((key) => key.kind === "enc" && !key.testOnly);
+  // The AES key is derived from the single pack password; only the signing key
+  // is ever stored, and even that is invisible to the operator.
+  getPackPassword();
   let sig = file.keys.find((key) => key.kind === "sig" && !key.testOnly);
-
-  if (!enc) {
-    const aes = crypto.randomBytes(32);
-    const { secret, protection } = protect(aes);
-    enc = {
-      keyId: `enc-studio-${randomSuffix()}`,
-      kind: "enc",
-      createdAt: new Date().toISOString(),
-      testOnly: false,
-      protection,
-      secret,
-    };
-    upsert(file, enc);
-    changed = true;
-  }
   if (!sig) {
     const { seed, publicRaw } = generateSigningKeyPair();
     const { secret, protection } = protect(seed);
@@ -203,7 +247,7 @@ export function ensureStudioKeys(): { encryptionKeyId: string; signatureKeyId: s
     changed = true;
   }
   if (changed) save(file);
-  return { encryptionKeyId: enc.keyId, signatureKeyId: sig.keyId };
+  return { encryptionKeyId: PACK_KEY_ID, signatureKeyId: sig.keyId };
 }
 
 export interface ImportedKeyFile {
@@ -273,6 +317,7 @@ export function importKeys(text: string): KeyRecord[] {
 }
 
 export function getAesKey(keyId: string): Buffer {
+  if (keyId === PACK_KEY_ID) return derivePackKey(getPackPassword());
   const key = load().keys.find((candidate) => candidate.keyId === keyId && candidate.kind === "enc");
   if (!key) throw new Error(`encryption key "${keyId}" is not available in this operator profile`);
   const raw = unprotect(key);

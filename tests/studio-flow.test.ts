@@ -315,7 +315,7 @@ test("one-click export needs nothing from the operator: keys and version are aut
   assert.ok(fs.existsSync(outcome.packPath));
   assert.equal(outcome.manifestUrlHint, "", "no hosting URL is required to export");
   const row = getProjectDetail(projectId).exports.find((item) => item.exportId === outcome.exportId);
-  assert.match(row?.encryptionKeyId ?? "", /^enc-studio-/, "an app-provisioned AES key is used");
+  assert.equal(row?.encryptionKeyId, "enc-main", "the single pack password drives the AES key");
   assert.match(row?.signatureKeyId ?? "", /^sig-studio-/);
   assert.equal(verifyExport(outcome.exportId).verified, true);
 

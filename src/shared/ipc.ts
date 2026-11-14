@@ -47,6 +47,9 @@ export const CH = {
   keysGenerateTest: "keys:generate-test",
   keysImport: "keys:import",
   keysBackup: "keys:backup",
+  keysPassword: "keys:password",
+  keysSetPassword: "keys:set-password",
+  keysRotatePassword: "keys:rotate-password",
 
   statsGet: "stats:get",
   statsSave: "stats:save",

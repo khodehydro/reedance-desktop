@@ -3,7 +3,7 @@ import type { AppInfo, Settings, ThemeMode } from "@shared/types";
 import { api } from "../api";
 import { useLang } from "../i18n";
 import { formatDate } from "../format";
-import { Button, Callout, Field, KeyValue, Mono, Section, TextInput, useToast } from "./ui";
+import { Button, Callout, CopyButton, Field, KeyValue, Mono, Section, TextInput, useToast } from "./ui";
 
 /**
  * Settings stays small on purpose: language, appearance, where exports go and
@@ -28,6 +28,16 @@ export function SettingsPage({
   const [archiveDir, setArchiveDir] = useState(settings?.archiveDir ?? "");
   const [manifestBase, setManifestBase] = useState(settings?.defaultManifestBaseUrl ?? "");
   const [busy, setBusy] = useState(false);
+  const [password, setPasswordState] = useState("");
+  const [reveal, setReveal] = useState(false);
+  const [passwordDraft, setPasswordDraft] = useState("");
+
+  useEffect(() => {
+    void api.keys.password().then((value) => {
+      setPasswordState(value);
+      setPasswordDraft(value);
+    });
+  }, []);
 
   useEffect(() => {
     if (settings) {
@@ -139,10 +149,74 @@ export function SettingsPage({
             {t("ذخیره", "Save")}
           </Button>
         </div>
-        <Callout tone="info" title={t("کلیدها", "Keys")}>
+      </Section>
+
+      <Section
+        title={t("رمز فایل‌ها", "File password")}
+        description={t(
+          "فقط همین یک رمز وجود دارد. فایل‌های خروجی با همین رمز باز می‌شوند و همان را در اپ اندروید وارد می‌کنید.",
+          "There is exactly one password. Output files open with it, and it is the same string you enter in the Android app.",
+        )}
+      >
+        <div className="password-box">
+          <div className="password-value">
+            <span className="tiny muted">{t("رمز فعلی", "current password")}</span>
+            <Mono>{reveal ? password : "•".repeat(Math.max(12, Math.min(28, password.length)))}</Mono>
+          </div>
+          <div className="row gap-sm wrap">
+            <Button size="sm" variant="ghost" onClick={() => setReveal((value) => !value)}>
+              {reveal ? t("پنهان کردن", "Hide") : t("نمایش", "Show")}
+            </Button>
+            <CopyButton value={password} label={t("کپی رمز", "Copy password")} />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                if (!window.confirm(t(
+                  "رمز تازه ساخته شود؟ بسته‌های قبلی با رمز جدید باز نمی‌شوند.",
+                  "Generate a new password? Older packs will not open with it.",
+                ))) return;
+                const next = await api.keys.rotatePassword();
+                setPasswordState(next);
+                setPasswordDraft(next);
+                setReveal(true);
+                toast.push(t("رمز تازه ساخته شد.", "A new password was generated."), "ok");
+              }}
+            >
+              {t("ساخت رمز تازه", "Generate a new one")}
+            </Button>
+          </div>
+        </div>
+
+        <Field
+          label={t("تعیین رمز دلخواه", "set your own password")}
+          hint={t("حداقل ۱۲ نویسه. همان رمزی است که در اندروید وارد می‌کنید.", "At least 12 characters; the same string goes into the Android app.")}
+          wide
+        >
+          <div className="row gap-sm">
+            <TextInput value={passwordDraft} onChange={setPasswordDraft} mono dir="ltr" />
+            <Button
+              size="sm"
+              disabled={passwordDraft.trim().length < 12 || passwordDraft.trim() === password}
+              onClick={async () => {
+                try {
+                  const saved = await api.keys.setPassword(passwordDraft.trim());
+                  setPasswordState(saved);
+                  toast.push(t("رمز ذخیره شد.", "Password saved."), "ok");
+                } catch (error) {
+                  toast.push(error instanceof Error ? error.message : String(error), "bad");
+                }
+              }}
+            >
+              {t("ذخیرهٔ رمز", "Save password")}
+            </Button>
+          </div>
+        </Field>
+
+        <Callout tone="warn" title={t("رمز را داخل اپ اندروید هارد‌کد نکنید", "Never hard-code the password inside the Android app")}>
           {t(
-            "کلید رمزنگاری و کلید امضا را برنامه خودش می‌سازد و در ویندوز با DPAPI محافظت می‌کند؛ شما کاری لازم نیست انجام دهید. فقط اگر پروفایل ویندوز را پاک کنید، بسته‌های قبلی دیگر با همین کلید تأیید نمی‌شوند.",
-            "The app generates the encryption and signing keys itself and protects them with DPAPI; there is nothing to configure. Only wiping the Windows profile loses the key that verifies older packs.",
+            "هر رمزی که داخل APK نوشته شود با مهندسی معکوس قابل استخراج است. رمز را یک‌بار در اپ اندروید وارد کنید و آنجا در Keystore دستگاه نگه دارید؛ فایل رمز در ویندوز هم در پوشهٔ محلی برنامه با دسترسی محدود ذخیره می‌شود.",
+            "Any password baked into an APK can be recovered by reverse engineering. Enter it once in the Android app and keep it in the device Keystore; on Windows it lives in the app's local folder with restricted permissions.",
           )}
         </Callout>
       </Section>

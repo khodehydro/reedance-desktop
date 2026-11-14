@@ -48,13 +48,13 @@ playable is produced here:
    `Space` play/pause, `J`/`K` line navigation, `A`/`B` loop, zoom, plus a
    **distribute evenly** action for long songs (46 lines in one click, then
    adjust the ones that matter).
-4. **Export** — one button. The app provisions its own AES-256 and Ed25519
-   keys on first launch (protected by DPAPI), resolves the version code and
-   writes `v000001-<sha256>.rdpack` (AES-256-GCM, GCM tag over the exact header
-   as AAD, ZIP with `lesson.json` + audio + optional cover) plus a signed
-   `latest.json` (Ed25519, base64url, `REEDANCE-MANIFEST-V1` message).
-   Each written pack is re-opened and re-validated before it is recorded, and
-   the file is revealed in its folder.
+4. **Export** — one button. There is a **single file password** (generated on
+   first launch, shown in Settings and after every export). The AES-256 key is
+   `PBKDF2-HMAC-SHA256(password, "reedance-pack-v1", 200000, 32)`; the plain ZIP
+   (`lesson.json` + audio + optional cover) is sealed with AES-256-GCM into
+   `v000001-<sha256>.rdpack`, and a signed `latest.json` is written beside it.
+   The same password is what the operator enters once in the Android app — it is
+   never embedded in the APK. See [`docs/CRYPTO.md`](docs/CRYPTO.md).
 5. **Publish** — optional HTTPS verification of a hosted `latest.json`/pack pair
    with size caps, redirect restrictions and signature comparison.
 
@@ -107,13 +107,15 @@ tests and the NSIS build on `windows-latest` for every push and uploads
 `Reedance-Studio-Setup-1.0.0-x64.exe` as an artifact. The installer is
 unsigned by design: signing needs a certificate that must not be committed.
 
-## Keys
+## The one secret
 
-Only the `contracts/fixtures/keys.test.json` **TEST** keys may be used for demo
-exports. They are marked `testOnly` and any export that used them can never be
-published. Production AES-256 and Ed25519 keys are generated inside the app,
-protected with Electron `safeStorage` where available, and exported only as an
-encrypted backup with an operator passphrase.
+`Settings → File password` shows the only secret in the product. It is a
+20-character human-friendly password, stored in the app profile with restricted
+permissions, and it derives the pack key with fixed, documented parameters
+(`docs/CRYPTO.md`). Rotating it makes older packs unreadable with the new
+password, so only do that on purpose. The fixture **TEST** keys under
+`contracts/fixtures/` are still used by the tests; any export that used them is
+marked `testOnly` and can never be published.
 
 ## Out of scope
 

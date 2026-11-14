@@ -25,6 +25,8 @@ import type {
  * app path (the preload bridge always wins when `window.reedance` exists) and
  * the UI shows a "browser preview" banner whenever it is active.
  */
+let PACK_PASSWORD = "preview-2f7kq-9wmdx-4rtbz-8hnps";
+
 const SETTINGS: Settings = {
   archiveDir: "(browser preview) no archive on disk",
   lang: "fa",
@@ -769,6 +771,15 @@ export function createMockBridge(): StudioApi {
       generateTest: async () => keys,
       importFromFile: async () => keys,
       backup: async () => null,
+    password: async () => PACK_PASSWORD,
+    setPassword: async (password) => {
+      PACK_PASSWORD = password;
+      return PACK_PASSWORD;
+    },
+    rotatePassword: async () => {
+      PACK_PASSWORD = "preview-2f7kq-9wmdx-4rtbz-8hnps";
+      return PACK_PASSWORD;
+    },
     },
     stats: {
       get: async (scope): Promise<StatsReport> => ({

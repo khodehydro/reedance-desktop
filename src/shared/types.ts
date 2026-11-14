@@ -683,6 +683,10 @@ export interface StudioApi {
     generateTest(): Promise<KeyRecord[]>;
     importFromFile(): Promise<KeyRecord[]>;
     backup(passphrase: string): Promise<string | null>;
+    /** The single pack password the operator also enters in the Android app. */
+    password(): Promise<string>;
+    setPassword(password: string): Promise<string>;
+    rotatePassword(): Promise<string>;
   };
   stats: {
     get(scope: StatsScope): Promise<StatsReport>;
