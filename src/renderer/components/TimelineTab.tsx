@@ -53,6 +53,7 @@ export function TimelineTab({
     return map;
   });
   const [dirty, setDirty] = useState(false);
+  const [distributing, setDistributing] = useState(false);
   const [loop, setLoop] = useState<{ a: number | null; b: number | null; active: boolean }>({ a: null, b: null, active: false });
 
   /* Resync when the project changes underneath us (e.g. after a save). */
@@ -318,6 +319,26 @@ export function TimelineTab({
     return () => clearTimeout(timer);
   }, [dirty, marks, onChanged, projectId, toast]);
 
+  const distribute = async (): Promise<void> => {
+    const timed = content.lyrics.filter((line) => (marks[line.id]?.startMs ?? null) !== null).length;
+    if (timed > 0 && !window.confirm(t(
+      `${timed} سطر زمان دارد. همهٔ زمان‌ها با توزیع یکنواخت بازنویسی شوند؟`,
+      `${timed} line(s) already have times. Overwrite them with an even spread?`,
+    ))) {
+      return;
+    }
+    setDistributing(true);
+    try {
+      await api.marks.distribute(projectId);
+      await onChanged();
+      toast.push(t("زمان‌ها توزیع شد؛ حالا هر سطر را که لازم است اصلاح کنید.", "Times distributed — adjust the lines that matter."), "ok");
+    } catch (error) {
+      toast.push(error instanceof Error ? error.message : String(error), "bad");
+    } finally {
+      setDistributing(false);
+    }
+  };
+
   const pointerPosition = (event: React.PointerEvent<HTMLDivElement>): number => {
     const rect = event.currentTarget.getBoundingClientRect();
     return event.clientX - rect.left;
@@ -451,6 +472,20 @@ export function TimelineTab({
         <div className="row gap-sm wrap">
           <Button variant="primary" size="sm" onClick={capture}>
             {t("ثبت زمان سطر (M)", "Capture line time (M)")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void distribute()}
+            disabled={distributing || !detail.media}
+            title={t(
+              "زمان شروع همهٔ سطرها را یکنواخت روی مدت صوت پخش می‌کند؛ بعد آزادانه اصلاح کنید.",
+              "Spreads every line evenly across the audio; adjust afterwards as you like.",
+            )}
+          >
+            {distributing
+              ? t("در حال توزیع…", "Distributing…")
+              : t(`توزیع یکنواخت ${content.lyrics.length} سطر`, `Distribute ${content.lyrics.length} lines`)}
           </Button>
           <Badge tone="muted">{t("سطر انتخابی", "selected")}: {selectedIndex + 1}/{content.lyrics.length}</Badge>
           {dirty ? <Badge tone="warn">{t("ذخیره‌نشده", "unsaved")}</Badge> : <Badge tone="ok">{t("ذخیره شد", "saved")}</Badge>}

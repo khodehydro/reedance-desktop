@@ -652,6 +652,7 @@ export interface StudioApi {
   };
   marks: {
     save(projectId: string, marks: { lineId: string; startMs: number | null; endMs: number | null }[]): Promise<ProjectDetail>;
+    distribute(projectId: string): Promise<ProjectDetail>;
     setReviewed(projectId: string, lineIds: string[], reviewed: boolean): Promise<ProjectDetail>;
   };
   review: {

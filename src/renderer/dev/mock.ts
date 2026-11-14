@@ -693,6 +693,18 @@ export function createMockBridge(): StudioApi {
       bytes: async () => audioBlob.arrayBuffer(),
     },
     marks: {
+      distribute: async () => {
+        const step = media.durationMs / content.lyrics.length;
+        content.lyrics.forEach((line, index) => {
+          const mark = marks.find((candidate) => candidate.lineId === line.id);
+          if (!mark) return;
+          mark.startMs = Math.min(media.durationMs - 1, Math.round(step * index));
+          mark.endMs = null;
+          mark.reviewed = false;
+          mark.reviewedAudioSha = null;
+        });
+        return detail();
+      },
       save: async (_projectId, patch) => {
         for (const item of patch) {
           const existing = marks.find((mark) => mark.lineId === item.lineId);

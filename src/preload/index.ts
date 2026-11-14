@@ -54,6 +54,7 @@ const api: StudioApi = {
   marks: {
     save: (projectId, marks) => ipcRenderer.invoke(CH.marksSave, projectId, marks),
     setReviewed: (projectId, lineIds, reviewed) => ipcRenderer.invoke(CH.marksSetReviewed, projectId, lineIds, reviewed),
+    distribute: (projectId) => ipcRenderer.invoke(CH.marksDistribute, projectId),
   },
   review: {
     approve: (projectId, input) => ipcRenderer.invoke(CH.reviewApprove, projectId, input),

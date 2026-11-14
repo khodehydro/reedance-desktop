@@ -45,7 +45,9 @@ playable is produced here:
    project folder, hashed (SHA-256), measured (duration, codec, bytes) and
    rendered as a waveform. Replacing it invalidates every mark and the approval.
 3. **Timeline** — mark/undo/redo, numeric edit, click-to-seek, `M` capture,
-   `Space` play/pause, `J`/`K` line navigation, `A`/`B` loop, zoom.
+   `Space` play/pause, `J`/`K` line navigation, `A`/`B` loop, zoom, plus a
+   **distribute evenly** action for long songs (46 lines in one click, then
+   adjust the ones that matter).
 4. **Export** — one button. The app provisions its own AES-256 and Ed25519
    keys on first launch (protected by DPAPI), resolves the version code and
    writes `v000001-<sha256>.rdpack` (AES-256-GCM, GCM tag over the exact header

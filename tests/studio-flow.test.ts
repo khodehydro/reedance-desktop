@@ -18,6 +18,7 @@ import {
   getProjectDetail,
   preflight,
   saveContent,
+  distributeMarks,
   saveMarks,
   saveMedia,
   saveRights,
@@ -267,6 +268,35 @@ test("editing content keeps export possible but revokes the recorded approval an
       ),
     /export is locked/i,
   );
+});
+
+test("an untimed project reports only the reasons that actually block the file", () => {
+  const content = getProjectDetail(projectId).content;
+  saveMarks(
+    projectId,
+    content.lyrics.map((line) => ({ lineId: line.id, startMs: null, endMs: null })),
+    audio,
+    content,
+  );
+  assert.throws(
+    () => runQuickExport(projectId, {}, { archiveRoot }),
+    (error: Error) => {
+      assert.match(error.message, /export is locked/);
+      assert.ok(!/reviewed|approval/i.test(error.message), `irrelevant gates leaked: ${error.message}`);
+      assert.match(error.message, /timed/i);
+      return true;
+    },
+  );
+});
+
+test("the timeline can distribute every line evenly and export immediately", () => {
+  const detail = distributeMarks(projectId);
+  assert.equal(detail.marks.length, detail.content.lyrics.length);
+  assert.ok(detail.marks.every((mark) => mark.startMs !== null));
+  assert.ok(detail.marks.every((mark) => (mark.startMs ?? 0) < audio.durationMs));
+  assert.ok(detail.preflight.canExport);
+  const outcome = runQuickExport(projectId, {}, { archiveRoot });
+  assert.ok(fs.existsSync(outcome.packPath));
 });
 
 test("one-click export needs nothing from the operator: keys and version are automatic", () => {

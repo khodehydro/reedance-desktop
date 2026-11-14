@@ -778,6 +778,31 @@ export function saveMarks(
   refreshState(projectId);
 }
 
+/**
+ * Fill every lyric line with an evenly spaced start time.
+ *
+ * 46 lines of a 3-minute song are impractical to click one by one, so the
+ * timeline offers this as a starting grid: the operator then drags the markers
+ * that matter. It never runs on its own — the file is only correct once the
+ * operator looked at it.
+ */
+export function distributeMarks(projectId: string): ProjectDetail {
+  const row = loadProject(projectId);
+  const content = readContent(row);
+  const media = readMedia(projectId)?.media ?? null;
+  if (!media || media.durationMs <= 0) throw new Error("select the audio first: distribution needs its duration");
+  if (content.lyrics.length === 0) throw new Error("this lesson has no lyric lines");
+  const step = media.durationMs / content.lyrics.length;
+  const patch = content.lyrics.map((line, index) => ({
+    lineId: line.id,
+    startMs: Math.min(media.durationMs - 1, Math.round(step * index)),
+    endMs: null,
+  }));
+  saveMarks(projectId, patch, media, content);
+  audit(projectId, "timeline-distributed", "operator", { lines: patch.length, durationMs: media.durationMs });
+  return getProjectDetail(projectId);
+}
+
 export function setReviewed(projectId: string, lineIds: string[], reviewed: boolean): ProjectDetail {
   const row = loadProject(projectId);
   const content = readContent(row);

@@ -11,7 +11,7 @@ import type {
 import { audit, flushNow, get, run, scalar, transaction } from "./db";
 import { ensureStudioKeys, getAesKey, getSigningPrivateKey, getSigningPublicKey, isTestKey } from "./keys";
 import { assertInside, writeFileAtomic } from "./paths";
-import { buildLessonForExport, exportRow, loadProject, preflight, readMedia, readPayload } from "./projects";
+import { EXPORT_GATES, buildLessonForExport, exportRow, loadProject, preflight, readMedia, readPayload } from "./projects";
 import { nowIso, sha256Hex } from "./util";
 import { decryptPack, encryptPack, packFileName, parsePackHeader } from "./crypto/pack";
 import { signManifest, verifyManifest } from "./crypto/sign";
@@ -97,7 +97,11 @@ export function songArchiveDir(context: ExportContext, targetLanguage: string, s
 export function runExport(projectId: string, options: ExportOptions, context: ExportContext): ExportOutcome {
   const report = preflight(projectId);
   if (!report.canExport) {
-    const failed = report.gates.filter((gate) => !gate.ok).map((gate) => `${gate.labelEn}: ${gate.detail}`);
+    // Only the gates that actually block an export are reported; the review and
+    // approval gates still exist in the data model but never lock the file.
+    const failed = report.gates
+      .filter((gate) => !gate.ok && (EXPORT_GATES as readonly string[]).includes(gate.key))
+      .map((gate) => `${gate.labelEn}: ${gate.detail}`);
     throw new Error(`export is locked — ${failed.join("; ")}`);
   }
   if (!/^\d+\.\d+\.\d+$/.test(options.displayVersion)) {

@@ -31,6 +31,7 @@ export function ReviewExportTab({
   const [advanced, setAdvanced] = useState(false);
   const [displayVersion, setDisplayVersion] = useState("1.0.0");
   const [manifestBaseUrl, setManifestBaseUrl] = useState("");
+  const [filling, setFilling] = useState(false);
 
   const lineCount = detail.content.lyrics.length;
   const timedCount = detail.marks.filter((mark) => mark.startMs !== null).length;
@@ -57,6 +58,25 @@ export function ReviewExportTab({
       toast.push(error instanceof Error ? error.message : String(error), "bad");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const fillTimings = async (): Promise<void> => {
+    setFilling(true);
+    try {
+      await api.marks.distribute(detail.summary.projectId);
+      await onChanged();
+      toast.push(
+        t(
+          "زمان‌ها یکنواخت توزیع شد. اگر جایی دقیق نیست، در تایم‌لاین اصلاح کنید.",
+          "Times were spread evenly. Adjust anything that feels off in the timeline.",
+        ),
+        "ok",
+      );
+    } catch (error) {
+      toast.push(error instanceof Error ? error.message : String(error), "bad");
+    } finally {
+      setFilling(false);
     }
   };
 
@@ -113,9 +133,16 @@ export function ReviewExportTab({
                 {t("رفتن به صوت و تایم‌لاین", "Go to audio & timeline")}
               </Button>
             ) : timedCount !== lineCount ? (
-              <Button variant="ghost" onClick={onOpenTimeline}>
-                {t("رفتن به تایم‌لاین", "Go to the timeline")}
-              </Button>
+              <>
+                <Button variant="ghost" onClick={onOpenTimeline}>
+                  {t("رفتن به تایم‌لاین", "Go to the timeline")}
+                </Button>
+                <Button onClick={() => void fillTimings()} disabled={filling}>
+                  {filling
+                    ? t("در حال پرکردن…", "Filling…")
+                    : t(`پرکردن خودکار ${lineCount - timedCount} سطر`, `Auto-fill ${lineCount - timedCount} lines`)}
+                </Button>
+              </>
             ) : null}
             <Button variant="primary" onClick={() => void runExport()} disabled={busy}>
               {busy ? t("در حال ساخت…", "Building…") : t("دریافت فایل خروجی", "Get the output file")}

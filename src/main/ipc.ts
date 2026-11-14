@@ -37,6 +37,7 @@ import {
   removeProject,
   revokeApproval,
   saveContent,
+  distributeMarks,
   saveMarks,
   saveRights,
   saveMedia,
@@ -315,6 +316,12 @@ export function registerIpc(): void {
     saveMarks(project, patch, readMedia(project)?.media ?? null, content);
     notifyChanged();
     return getProjectDetail(project);
+  });
+
+  ipcMain.handle(CH.marksDistribute, (_event, projectId: unknown) => {
+    const detail = distributeMarks(id(projectId, "projectId"));
+    notifyChanged();
+    return detail;
   });
 
   ipcMain.handle(CH.marksSetReviewed, (_event, projectId: unknown, lineIds: unknown, reviewed: unknown) => {

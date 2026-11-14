@@ -20,8 +20,10 @@
 | --- | --- | --- |
 | ۱. ورود پیش‌نویس | «ورود پیش‌نویس» → فایل `*.rddraft.json` | ساختار و قواعد محتوایی بدون خطا؛ هیچ timing/مدیایی در فایل نباشد |
 | ۲. انتخاب صوت | تب «صوت» → انتخاب فایل از سیستم | کپی محلی، هش SHA-256، کدک و مدت اندازه‌گیری شود |
-| ۳. سینک لیریک | تب «تایم‌لاین» | هر سطر زمان شروع دارد، زمان‌ها صعودی و داخل مدت صوت‌اند |
+| ۳. سینک لیریک | تب «تایم‌لاین» → دکمهٔ **توزیع یکنواخت** یا ثبت دستی با `M` | هر سطر زمان شروع دارد، زمان‌ها صعودی و داخل مدت صوت‌اند |
 | ۴. خروجی | تب «خروجی» → دکمهٔ **دریافت فایل خروجی** | ساخت `.rdpack` + `latest.json` امضاشده با کلیدهای خودکار |
+
+اگر ۴۰ سطر یا بیشتر دارید، از دکمهٔ «توزیع یکنواخت N سطر» (در تایم‌لاین یا در تب خروجی) استفاده کنید: زمان شروع همهٔ سطرها به‌طور یکنواخت روی مدت صوت پخش می‌شود و بعد فقط سطرهایی که دقیق نیستند را اصلاح می‌کنید.
 
 کلیدها را خود برنامه می‌سازد (AES-256 و Ed25519، محافظت‌شده با DPAPI) و بازبینی/تأیید انسانی و چک‌لیست حقوق از جریان کار حذف شده است. فقط سه چیز خروجی را قفل می‌کند: نبودِ صوت، مدت نامشخص، و سطرهای بدون زمان یا زمان‌های نامرتب.
 
@@ -59,5 +61,7 @@ extension over the pinned v1 contract and is flagged in the UI; Turkish packs
 must only be published to an Android build that accepts `tr`. Drafts without a
 `level` (common in the Turkish set) need one chosen in the overview tab before
 export unlocks.
+
+Long songs: use **Distribute N lines** (timeline or export tab) to lay a starting grid over the audio, then nudge only the lines that need it. The export error now lists only the technical reasons (audio, duration, timings, content), never review or approval.
 
 Keyboard: `Space` play/pause, `M` capture a mark and advance, `←/→` ±100 ms (`Shift` ±1 s), `J/K` previous/next line, `A/B` loop points.

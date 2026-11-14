@@ -30,6 +30,7 @@ export const CH = {
 
   marksSave: "marks:save",
   marksSetReviewed: "marks:set-reviewed",
+  marksDistribute: "marks:distribute",
 
   reviewApprove: "review:approve",
   reviewRevoke: "review:revoke",
