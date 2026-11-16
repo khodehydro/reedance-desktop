@@ -24,7 +24,7 @@ installer icon. The splash screen is signed "HYDRO team".
 
 | file | size | SHA-256 |
 | --- | --- | --- |
-| `Reedance-Studio-Setup-1.0.5-x64.exe` | 135,172,551 bytes | `99e72025adbcdbd2feb11444407cbef1b7a82bb6f20ae3840b7f6061d40a99bf` |
+| `Reedance-Studio-Setup-1.0.6-x64.exe` | 135,173,110 bytes | `a6b7d757d847129f7b1b7171383b2826593fc697c7dc77f2bf627c88b245bf18` |
 
 The installer sits at the repository root of this workspace. A copy of the same
 build is attached to the GitHub release
