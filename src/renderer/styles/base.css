@@ -1514,9 +1514,9 @@ code,
   color: var(--muted);
 }
 
-/* ------------------------------ pack password ------------------------------ */
+/* --------------------------- pack key (no password) ------------------------- */
 
-.password-box {
+.key-box {
   display: grid;
   gap: 8px;
   padding: 12px 14px;
@@ -1525,20 +1525,20 @@ code,
   background: rgba(95, 176, 255, 0.06);
 }
 
-.password-value {
+.key-value {
   display: flex;
   align-items: baseline;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.password-value .mono-inline,
-.password-value code {
+.key-value .mono-inline,
+.key-value code {
   font-size: 14px;
   letter-spacing: 0.06em;
 }
 
-.password-row {
+.key-row {
   display: flex;
   align-items: center;
   gap: 8px;

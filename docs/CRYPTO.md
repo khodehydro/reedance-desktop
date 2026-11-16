@@ -1,68 +1,86 @@
-# The single pack password (crypto for humans)
+# تحویل بدون رمز — Windows Studio ↔ Reedance Android
 
-There is exactly **one secret** in Reedance Studio: the file password. It is
-created automatically, shown in *Settings → File password* and again after every
-export. The same string is what you enter once in the Android app.
+**وضعیت: پیاده‌سازی‌شده در نسخهٔ ۱.۰.۶.** این سند جایگزین مدل «رمز فایل» است. در تعارض با هر توضیح قدیمی (از جمله نسخهٔ قبلی همین فایل)، این متن مقدم است.
 
-Everything else — hashing, the container layout, the signature on `latest.json` —
-is internal. You never see it, pick it or confirm it.
+## تصمیم
 
-## What the password does
+- Windows Studio یک فایل `.rdpack` نسخه‌دار و رمزنگاری‌شده می‌سازد، به‌همراه `latest.json` امضاشده.
+- اپ اندروید فایل را خودش باز می‌کند: امضا، اندازه، هش و تگ GCM را بررسی می‌کند و بعد محتوا را استخراج می‌کند.
+- **هیچ رمزی ساخته، پرسیده، ذخیره یا بین دو برنامه رد و بدل نمی‌شود.** نه PBKDF2، نه رمز فایل، نه ورودی رمز در اندروید.
 
-```
-key = PBKDF2-HMAC-SHA256(
-         password = NFKC(password).trim(),   // the string shown in the app
-         salt     = "reedance-pack-v1",
-         rounds   = 200000,
-         length   = 32 bytes)
-```
+## کلید رمزنگاری
 
-The resulting 32-byte key encrypts the `.rdpack` with **AES-256-GCM**. The pack
-header keeps the same fixed `keyId` value for every file: `enc-main`.
+- شناسهٔ کلید در هدر بسته: `enc-main` (ثابت، عمومی، فقط یک برچسب است).
+- کلید: ۳۲ بایت AES-256. **داخل فایل، manifest یا نصاب نیست** — فقط در دو برنامه provision می‌شود.
+- nonce: ۱۲ بایت تازه از CSPRNG برای هر خروجی؛ هیچ‌گاه تکرار نمی‌شود.
+- هیچ KDF‌ای در v1 وجود ندارد و نباید اضافه شود.
 
-```
-"RDPACK1\0" | u8 keyIdLen | keyId "enc-main" | nonce[12] | u64 plaintextLen |
-ciphertext | tag[16]        (the whole header is the GCM additional data)
-```
+### کلید در Windows Studio از کجا می‌آید (اولی برنده است)
 
-Inside the encrypted payload is a plain ZIP: `lesson.json`, the audio file and,
-when present, `cover.jpg/png/webp`.
-
-## Android side
-
-1. Ask the operator for the password once (a text field, or a QR shown next to
-   the export).
-2. Derive the key with the parameters above (e.g. with
-   `javax.crypto.SecretKeyFactory` `PBKDF2WithHmacSHA256`, 200 000 iterations,
-   256 bits).
-3. Parse the header, take `keyId`, `nonce` and the length, then decrypt with
-   `AES/GCM/NoPadding` using the header bytes as AAD and the trailing 16 bytes as
-   the tag.
-4. Unzip in memory and read `lesson.json`; verify the audio SHA-256 from
-   `lesson.json.media.audio.sha256` if you want an extra integrity check.
-
-## Why the password is not inside the APK
-
-Any value compiled into an APK (string constant, `BuildConfig` field, asset file,
-native library) can be recovered by reverse engineering — that is true of every
-scheme, no matter how it is obfuscated. So:
-
-- **Do not** hard-code the password in the Android project.
-- Ask the user for it once and store it with the platform keystore
-  (`EncryptedSharedPreferences` with an Android Keystore master key, or the
-  equivalent). The key material then lives in hardware-backed storage and cannot
-  be lifted from the APK.
-- Rotate the password if it leaks: *Settings → Generate a new one*. Packs made
-  with the old password stay readable with the old password only.
-
-On Windows the password lives in the app's local profile
-(`…/studio/keys/pack-password.txt`, readable only by your Windows account). It is
-never placed in an installer, a repository file, a log, or the pack header.
-
-## What is still computed (and why you can ignore it)
-
-| Step | Why it exists | Who sees it |
+| ترتیب | منبع | نحوهٔ استفاده |
 | --- | --- | --- |
-| SHA-256 of audio, pack and manifest | detects corruption and version drift | nobody; shown only as a short hash in the library |
-| Ed25519 signature over `latest.json` | lets an app reject a tampered update manifest | nobody; verify in the app or ignore for local files |
-| AES-256-GCM tag | makes a modified pack fail instead of playing garbage | one error message if the password is wrong |
+| ۱ | `REEDANCE_ENC_MAIN_KEY` | ۳۲ بایت به‌صورت base64url، base64 یا hex |
+| ۲ | `…/studio/keys/enc-main.key` | همان متن، یا دقیقاً ۳۲ بایت خام؛ دسترسی `0600` |
+| ۳ | کلید واردشده در برنامه | «تنظیمات → وارد کردن فایل کلید» (JSON موجود در `keys:import`) |
+| ۴ | **کلید تستی** | تا وقتی کلید واقعی provision نشده باشد |
+
+کلید تستی عمداً عمومی است و همان در fixtureهای اندروید هم وجود دارد:
+
+```
+key    = SHA-256(UTF8("reedance-test-enc-main-v1"))
+hex    = 04f483dd99a10e05c341ab48f64cbbce77f719d93403c9b4a74f6a244adc77b5
+base64url = BPSD3ZmhDgXDQatI9ky7znf3Gdk0A8m0p09qJErcd7U
+```
+
+خروجی‌هایی که با این کلید ساخته شوند در UI با برچسب «کلید تستی» مشخص و در دیتابیس `used_test_keys = 1` ثبت می‌شوند؛ برای انتشار مجاز نیستند. کلید واقعی هرگز در گیت، نصاب، لاگ، manifest یا چت گذاشته نمی‌شود.
+
+برای provision کلید واقعی، فایل کلید را از مالک پروژه بگیرید و در `…/studio/keys/enc-main.key` بگذارید (یا از دکمهٔ «وارد کردن فایل کلید» استفاده کنید). از آن پس همهٔ خروجی‌ها با کلید انتشار رمز می‌شوند و بج «کلید نصب‌شده» نمایش داده می‌شود. اثر انگشت (۱۶ نویسهٔ اول SHA-256 کلید) در تنظیمات دیده می‌شود تا دو طرف بدون افشای کلید مطمئن شوند یک کلید را دارند.
+
+### سمت اندروید
+
+1. کلید `enc-main` را از مسیر امن build/runtime بگیرید (مثلاً `local.properties` خارج از گیت یا Keystore) و در APK به‌صورت مبهم‌شده نگه دارید — نه در کد قابل‌جست‌وجو، نه در asset ساده.
+2. هیچ‌جا رمز نپرسید. `PackPassword`/`PackKeyStore`/`KeyDerivation`/خطای «رمز اشتباه» حذف می‌شوند.
+3. ترتیب بررسی: امضای `latest.json` → اندازه و SHA-256 فایل → تگ GCM **قبل از** استخراج → ZIP امن → schema/معنایی lesson → فعال‌سازی اتمی.
+4. خطاها را به علت واقعی نگاشت کنید: نسخهٔ ناشناخته، امضای نامعتبر، hash/size ناسازگار، کلید ناشناخته، خرابی فایل، شبکه.
+
+> صادقانه: رمزنگاری اینجا DRM نیست. هر کسی که کلید را در دستگاه داشته باشد می‌تواند فایل را باز کند؛ هدف، جلوگیری از ZIP خام، دستکاری و انتشار بی‌قاعدهٔ محتواست، نه تضمین ریاضی «فقط این اپ».
+
+## قالب `.rdpack` (v1، بدون تغییر)
+
+اعداد big-endian بدون علامت، طول‌ها بایتی، بدون padding:
+
+| offset | طول | مقدار |
+| --- | ---: | --- |
+| `0..7` | ۸ | `RDPACK1\0` |
+| `8` | ۱ | `L` = طول `keyId` (۱–۳۲) |
+| `9..8+L` | `L` | `enc-main` |
+| `9+L..20+L` | ۱۲ | nonce |
+| `21+L..28+L` | ۸ | طول ZIP خام (uint64) |
+| `29+L..28+L+P` | `P` | ciphertext (AES-256-GCM) |
+| `29+L+P..44+L+P` | ۱۶ | tag |
+
+`AAD = header` دقیقاً بایت‌های `[0 .. 29+L)`؛ خروجی رمز `ciphertext || tag`؛ طول کل فایل `45 + L + P`.
+گشودن در Kotlin: `Cipher.getInstance("AES/GCM/NoPadding")`، `GCMParameterSpec(128, nonce)`، `updateAAD(header)`.
+
+ZIP داخل بسته: فقط `lesson.json`، دقیقاً یک `audio.mp3|m4a|wav` و صفر یا یک `cover.jpg|png|webp`؛ بدون descriptor/extra field، روش فشرده‌سازی `STORE` یا `DEFLATE`.
+
+## نام فایل و manifest
+
+- نام بسته: `v${contentVersionCode.padStart(6,"0")}-${sha256}.rdpack`
+- `latest.json` کنار همان فایل نوشته می‌شود (و یک کپی در `manifests/`).
+- پیام امضا: `UTF8("REEDANCE-MANIFEST-V1\n") || UTF8(signatureKeyId) || UTF8("\n") || payloadBytes` — Ed25519 خالص روی بایت‌های اصلی payload، نه JSON بازسریال‌شده.
+- payload شامل `songId`، `targetLanguage`، `contentVersionCode`، `displayVersion`، `containerVersion`، `lessonSchemaVersion`، `releasedAt` و `package { fileName, sizeBytes, sha256, encryptionKeyId: "enc-main" }` است.
+
+## تست‌های تضمین‌کننده
+
+`tests/handoff.test.ts`:
+
+1. هیچ کانال IPC و هیچ فایل رمزی باقی نمانده است.
+2. نصب تازه با کلید تستی کار می‌کند و هیچ فایل کلیدی نمی‌نویسد.
+3. provision از متغیر محیطی و از فایل کلید (با دسترسی `0600`) و اولویت آن‌ها.
+4. بسته فقط با کلید استودیو باز می‌شود؛ nonce هر خروجی تازه است.
+5. کلید دیگر یا یک بایت تغییر‌یافته تگ را می‌شکند.
+6. بستهٔ fixture اندروید بدون هیچ رمزی در ویندوز باز می‌شود (سازگاری بایتی).
+7. کلید/فایل نامعتبر با پیام روشن رد می‌شود.
+
+`tests/studio-flow.test.ts` هم خروجی کامل یک‌دکمه‌ای را با `enc-main` می‌سازد، باز می‌کند و تأیید می‌کند.

@@ -25,8 +25,6 @@ import type {
  * app path (the preload bridge always wins when `window.reedance` exists) and
  * the UI shows a "browser preview" banner whenever it is active.
  */
-let PACK_PASSWORD = "preview-2f7kq-9wmdx-4rtbz-8hnps";
-
 const SETTINGS: Settings = {
   archiveDir: "(browser preview) no archive on disk",
   lang: "fa",
@@ -748,11 +746,11 @@ export function createMockBridge(): StudioApi {
       run: async (_projectId, options) => mockExport(options),
       quick: async (_projectId, input) =>
         mockExport({
-          encryptionKeyId: "enc-studio-preview",
+          encryptionKeyId: "enc-main",
           signatureKeyId: "sig-studio-preview",
           displayVersion: input?.displayVersion ?? "1.0.0",
           manifestBaseUrl: input?.manifestBaseUrl ?? "",
-          useTestKeys: false,
+          useTestKeys: true,
         }),
       verify: async () => ({ ...preflight(), verified: true, detail: ["Browser preview: nothing is written to disk."] }),
       stage: async () => null,
@@ -771,15 +769,13 @@ export function createMockBridge(): StudioApi {
       generateTest: async () => keys,
       importFromFile: async () => keys,
       backup: async () => null,
-    password: async () => PACK_PASSWORD,
-    setPassword: async (password) => {
-      PACK_PASSWORD = password;
-      return PACK_PASSWORD;
-    },
-    rotatePassword: async () => {
-      PACK_PASSWORD = "preview-2f7kq-9wmdx-4rtbz-8hnps";
-      return PACK_PASSWORD;
-    },
+      info: async () => ({
+        keyId: "enc-main",
+        source: "test",
+        testOnly: true,
+        fingerprint: "preview-test-key",
+        keyFile: "(browser preview) no key file",
+      }),
     },
     stats: {
       get: async (scope): Promise<StatsReport> => ({

@@ -48,13 +48,12 @@ playable is produced here:
    `Space` play/pause, `J`/`K` line navigation, `A`/`B` loop, zoom, plus a
    **distribute evenly** action for long songs (46 lines in one click, then
    adjust the ones that matter).
-4. **Export** — one button. There is a **single file password** (generated on
-   first launch, shown in Settings and after every export). The AES-256 key is
-   `PBKDF2-HMAC-SHA256(password, "reedance-pack-v1", 200000, 32)`; the plain ZIP
-   (`lesson.json` + audio + optional cover) is sealed with AES-256-GCM into
-   `v000001-<sha256>.rdpack`, and a signed `latest.json` is written beside it.
-   The same password is what the operator enters once in the Android app — it is
-   never embedded in the APK. See [`docs/CRYPTO.md`](docs/CRYPTO.md).
+4. **Export** — one button, no password anywhere. The plain ZIP (`lesson.json`
+   + audio + optional cover) is sealed with AES-256-GCM under the fixed
+   distribution key `enc-main` into `v000001-<sha256>.rdpack`, and a signed
+   `latest.json` is written beside it. The Android app already carries the same
+   key, so it opens the file itself — the operator never creates, reads or types
+   a secret. See [`docs/CRYPTO.md`](docs/CRYPTO.md).
 5. **Publish** — optional HTTPS verification of a hosted `latest.json`/pack pair
    with size caps, redirect restrictions and signature comparison.
 
@@ -107,15 +106,19 @@ tests and the NSIS build on `windows-latest` for every push and uploads
 `Reedance-Studio-Setup-1.0.0-x64.exe` as an artifact. The installer is
 unsigned by design: signing needs a certificate that must not be committed.
 
-## The one secret
+## There is no secret to handle
 
-`Settings → File password` shows the only secret in the product. It is a
-20-character human-friendly password, stored in the app profile with restricted
-permissions, and it derives the pack key with fixed, documented parameters
-(`docs/CRYPTO.md`). Rotating it makes older packs unreadable with the new
-password, so only do that on purpose. The fixture **TEST** keys under
-`contracts/fixtures/` are still used by the tests; any export that used them is
-marked `testOnly` and can never be published.
+`Settings → File encryption key` only reports which key seals packs: the key id
+(`enc-main`), where it came from and a truncated fingerprint — never key bytes.
+Windows reads that key in this order: `REEDANCE_ENC_MAIN_KEY`, then
+`…/studio/keys/enc-main.key`, then a key imported with the Settings button, then
+the published **TEST** key so a fresh install can export immediately. Test-key
+exports are badged in the UI, stored with `used_test_keys = 1` and must not be
+published. Provision the real key once (file or button) and every later export
+is encrypted with it; nothing is baked into the installer or committed to Git.
+
+Because the key lives in the Windows app and in the Android app, this protects
+the ZIP from tampering and casual redistribution — it is not DRM.
 
 ## Out of scope
 

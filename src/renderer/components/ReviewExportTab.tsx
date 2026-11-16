@@ -32,11 +32,6 @@ export function ReviewExportTab({
   const [displayVersion, setDisplayVersion] = useState("1.0.0");
   const [manifestBaseUrl, setManifestBaseUrl] = useState("");
   const [filling, setFilling] = useState(false);
-  const [password, setPasswordState] = useState("");
-
-  React.useEffect(() => {
-    void api.keys.password().then(setPasswordState);
-  }, []);
 
   const lineCount = detail.content.lyrics.length;
   const timedCount = detail.marks.filter((mark) => mark.startMs !== null).length;
@@ -199,10 +194,9 @@ export function ReviewExportTab({
                 <CopyButton value={result.manifestUrlHint} label={t("کپی نشانی انتشار", "Copy publish URL")} />
               ) : null}
             </div>
-            <div className="password-row">
-              <span className="tiny muted">{t("رمز فایل (همین را در اندروید وارد کنید)", "file password (enter this in the Android app)")}</span>
-              <Mono>{password}</Mono>
-              <CopyButton value={password} label={t("کپی", "copy")} />
+            <div className="key-row">
+              <span className="tiny muted">{t("رمز: ندارد — اندروید خودش باز می‌کند", "password: none — Android opens it itself")}</span>
+              <Mono>enc-main</Mono>
             </div>
             {result.manifestUrlHint ? (
               <p className="tiny">

@@ -19,13 +19,11 @@ import { createEmptyDraft, importDraftFile } from "./import";
 import {
   backupKeys,
   encryptionProtectionSummary,
-  generatePackPassword,
   generateTestKeys,
-  getPackPassword,
   importKeys,
   keyCount,
   listKeys,
-  setPackPassword,
+  packKeyInfo,
 } from "./keys";
 import { importAudio, importCover, withMeasuredDuration } from "./media";
 import { publishExport } from "./publication";
@@ -427,13 +425,7 @@ export function registerIpc(): void {
     notifyChanged();
     return keys;
   });
-  ipcMain.handle(CH.keysPassword, () => getPackPassword());
-
-  ipcMain.handle(CH.keysSetPassword, (_event, password: unknown) =>
-    setPackPassword(str(password, "password", 128)),
-  );
-
-  ipcMain.handle(CH.keysRotatePassword, () => setPackPassword(generatePackPassword()));
+  ipcMain.handle(CH.keysInfo, () => packKeyInfo());
 
   ipcMain.handle(CH.keysBackup, async (_event, passphrase: unknown) => {
     const secret = str(passphrase, "passphrase", 200);

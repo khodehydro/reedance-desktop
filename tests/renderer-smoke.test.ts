@@ -146,6 +146,9 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
   assert.ok(settings.includes("ظاهر"), "the settings page mounts");
   assert.ok(settings.includes("پوشهٔ خروجی‌ها"), "the output folder setting is offered");
   assert.ok(settings.includes("HYDRO team"), "the about section keeps the HYDRO team credit");
+  assert.ok(settings.includes("کلید رمزنگاری فایل‌ها"), "the key section replaces the password UI");
+  assert.ok(!settings.includes("رمز فایل‌ها"), "no file-password field is left in Settings");
+  assert.ok(settings.includes("enc-main"), "the fixed pack key id is shown");
 
   const library = await clickNav("کتابخانه");
   assert.ok(library.includes("کتابخانه"), "navigation returns to the library");

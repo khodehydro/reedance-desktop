@@ -501,6 +501,19 @@ export interface KeyRecord {
   fingerprint?: string;
 }
 
+/** Where the `.rdpack` AES-256 key comes from; never carries key bytes. */
+export type PackKeySource = "env" | "file" | "keystore" | "test";
+
+export interface PackKeyInfo {
+  keyId: string;
+  source: PackKeySource;
+  testOnly: boolean;
+  /** First 16 hex chars of SHA-256 over the key, for support/debugging only. */
+  fingerprint: string;
+  keyFile: string;
+  error?: string;
+}
+
 export interface ExportOutcome {
   exportId: string;
   versionCode: number;
@@ -683,10 +696,8 @@ export interface StudioApi {
     generateTest(): Promise<KeyRecord[]>;
     importFromFile(): Promise<KeyRecord[]>;
     backup(passphrase: string): Promise<string | null>;
-    /** The single pack password the operator also enters in the Android app. */
-    password(): Promise<string>;
-    setPassword(password: string): Promise<string>;
-    rotatePassword(): Promise<string>;
+    /** Which key encrypts packs. There is no password in this product. */
+    info(): Promise<PackKeyInfo>;
   };
   stats: {
     get(scope: StatsScope): Promise<StatsReport>;

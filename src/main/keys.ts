@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { SafeStorage } from "electron";
-import type { KeyRecord } from "../shared/types";
+import type { KeyRecord, PackKeyInfo, PackKeySource } from "../shared/types";
 import { fromBase64Url, sha256Hex, toBase64Url } from "./crypto/pack";
 import { ed25519PrivateKeyFromSeed, ed25519PublicKeyRaw, generateSigningKeyPair } from "./crypto/sign";
 import { keysDir, writeFileAtomic } from "./paths";
@@ -40,60 +40,108 @@ function keystorePath(): string {
 }
 
 /**
- * One password per studio profile.
+ * The `.rdpack` AES-256 key is a *distribution key*, not an operator secret.
  *
- * The `.rdpack` AES-256 key is derived from this password, so the operator only
- * ever handles a single string: the one they also enter in the Android app.
- * The password is never embedded in the APK — putting it there would make it
- * recoverable by reverse engineering — it is typed once into the app and kept in
- * the Android keystore.
+ * Windows Studio encrypts every export with one key identified in the pack
+ * header as `enc-main`, and the Reedance Android app is built with the matching
+ * key. Nothing is asked from the operator: no password, no passphrase, no key
+ * picker, no copy/paste between the two apps.
  *
- * Derivation (also implemented by the Android reader):
- *   key = PBKDF2-HMAC-SHA256(password = NFKC(password).trim(),
- *                            salt     = "reedance-pack-v1",
- *                            rounds   = 200000,
- *                            length   = 32)
- * The pack header keeps the same `keyId` field with the fixed value `enc-main`.
+ * Resolution order (first match wins):
+ *   1. `REEDANCE_ENC_MAIN_KEY` environment variable (32 bytes, see below)
+ *   2. `keys/enc-main.key` — same text form, or exactly 32 raw bytes (mode 0600)
+ *   3. the `enc-main` record in the local keystore (Settings → import key file)
+ *   4. the published TEST key, so a fresh install can export straight away
+ *
+ * Accepted text forms: hex (64 chars), base64url or base64 of the 32 raw bytes.
+ * The TEST key is public on purpose — it also lives in the Android test
+ * fixtures and in docs/CRYPTO.md. Exports made with it are flagged
+ * `usedTestKeys` and must not be published; a real key is never committed.
  */
 export const PACK_KEY_ID = "enc-main";
-export const PACK_PASSWORD_SALT = "reedance-pack-v1";
-export const PACK_PASSWORD_ITERATIONS = 200_000;
+export const TEST_PACK_KEY_LABEL = "reedance-test-enc-main-v1";
 
-function passwordPath(): string {
-  return path.join(keysDir(), "pack-password.txt");
+export function testPackKey(): Buffer {
+  return crypto.createHash("sha256").update(TEST_PACK_KEY_LABEL, "utf8").digest();
 }
 
-/** Human-friendly, unambiguous 20-char secret (no 0/o/1/l/i). */
-export function generatePackPassword(): string {
-  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
-  const bytes = crypto.randomBytes(20);
-  let raw = "";
-  for (const byte of bytes) raw += alphabet[byte % alphabet.length];
-  return raw.replace(/(.{5})(?=.)/g, "$1-");
+export function packKeyPath(): string {
+  return path.join(keysDir(), "enc-main.key");
 }
 
-export function getPackPassword(): string {
-  try {
-    const stored = fs.readFileSync(passwordPath(), "utf8").trim();
-    if (stored.length >= 12) return stored;
-  } catch {
-    // First run (or a deleted file): a password is generated below.
+/** Accept 32 raw bytes, or the hex / base64 / base64url text of those bytes. */
+export function parseKeyMaterial(input: Buffer | string): Buffer | null {
+  let raw = input;
+  if (Buffer.isBuffer(raw) && raw.length === 32) return Buffer.from(raw);
+  const text = (Buffer.isBuffer(raw) ? raw.toString("utf8") : raw).trim();
+  if (!text) return null;
+  if (/^[a-fA-F0-9]{64}$/.test(text)) return Buffer.from(text, "hex");
+  if (/^[A-Za-z0-9_-]{43}$/.test(text)) {
+    const decoded = fromBase64Url(text);
+    return decoded.length === 32 ? decoded : null;
   }
-  const generated = generatePackPassword();
-  writeFileAtomic(passwordPath(), `${generated}\n`, 0o600);
-  return generated;
+  if (/^[A-Za-z0-9+/]{43}=?$/.test(text)) {
+    const decoded = Buffer.from(text, "base64");
+    return decoded.length === 32 ? decoded : null;
+  }
+  return null;
 }
 
-export function setPackPassword(next: string): string {
-  const value = next.normalize("NFKC").trim();
-  if (value.length < 12) throw new Error("the pack password must be at least 12 characters");
-  if (value.length > 128) throw new Error("the pack password must be at most 128 characters");
-  writeFileAtomic(passwordPath(), `${value}\n`, 0o600);
-  return value;
+export function resolvePackKey(): { key: Buffer; source: PackKeySource } {
+  const fromEnv = process.env.REEDANCE_ENC_MAIN_KEY;
+  if (fromEnv && fromEnv.trim()) {
+    const key = parseKeyMaterial(fromEnv);
+    if (!key) throw new Error("REEDANCE_ENC_MAIN_KEY must hold a 32-byte key as base64url, base64 or hex");
+    return { key, source: "env" };
+  }
+
+  let fileBytes: Buffer | null = null;
+  try {
+    fileBytes = fs.readFileSync(packKeyPath());
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  if (fileBytes && fileBytes.length > 0) {
+    const key = parseKeyMaterial(fileBytes);
+    if (!key) throw new Error(`${packKeyPath()} must hold a 32-byte key as base64url, base64 or hex`);
+    return { key, source: "file" };
+  }
+
+  const stored = load().keys.find((candidate) => candidate.keyId === PACK_KEY_ID && candidate.kind === "enc");
+  if (stored) {
+    const raw = unprotect(stored);
+    if (raw.length !== 32) throw new Error("the stored enc-main key is corrupt");
+    return { key: raw, source: "keystore" };
+  }
+
+  return { key: testPackKey(), source: "test" };
 }
 
-export function derivePackKey(password: string): Buffer {
-  return crypto.pbkdf2Sync(password.normalize("NFKC").trim(), PACK_PASSWORD_SALT, PACK_PASSWORD_ITERATIONS, 32, "sha256");
+/** The AES-256 key used for packs; test-key fallback is signalled separately. */
+export function getPackKey(): Buffer {
+  return resolvePackKey().key;
+}
+
+/** Non-secret description of the pack key, safe to show in the UI. */
+export function packKeyInfo(): PackKeyInfo {
+  const base = { keyId: PACK_KEY_ID, keyFile: packKeyPath() };
+  try {
+    const { key, source } = resolvePackKey();
+    return {
+      ...base,
+      source,
+      testOnly: source === "test",
+      fingerprint: sha256Hex(key).slice(0, 16),
+    };
+  } catch (error) {
+    return {
+      ...base,
+      source: "test",
+      testOnly: true,
+      fingerprint: "",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function osKeystore(): SafeStorage | null {
@@ -227,9 +275,8 @@ export function generateTestKeys(): KeyRecord[] {
 export function ensureStudioKeys(): { encryptionKeyId: string; signatureKeyId: string } {
   const file = load();
   let changed = false;
-  // The AES key is derived from the single pack password; only the signing key
-  // is ever stored, and even that is invisible to the operator.
-  getPackPassword();
+  // The AES key is a provisioned distribution key (see resolvePackKey); only
+  // the signing key is stored here, and even that is invisible to the operator.
   let sig = file.keys.find((key) => key.kind === "sig" && !key.testOnly);
   if (!sig) {
     const { seed, publicRaw } = generateSigningKeyPair();
@@ -317,7 +364,7 @@ export function importKeys(text: string): KeyRecord[] {
 }
 
 export function getAesKey(keyId: string): Buffer {
-  if (keyId === PACK_KEY_ID) return derivePackKey(getPackPassword());
+  if (keyId === PACK_KEY_ID) return getPackKey();
   const key = load().keys.find((candidate) => candidate.keyId === keyId && candidate.kind === "enc");
   if (!key) throw new Error(`encryption key "${keyId}" is not available in this operator profile`);
   const raw = unprotect(key);
@@ -341,6 +388,7 @@ export function getSigningPublicKey(keyId: string): Buffer | null {
 }
 
 export function isTestKey(keyId: string): boolean {
+  if (keyId === PACK_KEY_ID) return resolvePackKey().source === "test";
   return load().keys.find((candidate) => candidate.keyId === keyId)?.testOnly ?? false;
 }
 
