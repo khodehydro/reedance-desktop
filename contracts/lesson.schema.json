@@ -24,10 +24,40 @@
     "idioms": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/phrase" } },
     "sentences": { "type": "array", "minItems": 1, "maxItems": 500, "items": { "$ref": "#/$defs/phrase" } },
     "vocabularyTables": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/table" } },
+    "story": {
+      "type": "object", "additionalProperties": false, "required": ["title"],
+      "oneOf": [{ "required": ["text"] }, { "required": ["pages"] }],
+      "properties": {
+        "title": { "$ref": "#/$defs/shortText" },
+        "text": { "$ref": "#/$defs/text" },
+        "pages": {
+          "type": "array", "minItems": 1, "maxItems": 30,
+          "items": { "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 3000, "pattern": "\\S" },
+            { "type": "object", "additionalProperties": false, "required": ["lines"], "properties": {
+              "lines": { "type": "array", "minItems": 1, "maxItems": 12, "items": { "$ref": "#/$defs/storyLine" } }
+            } }
+          ] }
+        }
+      }
+    },
     "questions": { "type": "array", "minItems": 1, "maxItems": 200, "items": { "$ref": "#/$defs/question" } },
     "idAliases": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/idAlias" } }
   },
   "$defs": {
+    "storyLine": {
+      "type": "object", "additionalProperties": false, "required": ["text"], "properties": {
+        "text": { "$ref": "#/$defs/shortText" },
+        "meaningFa": { "$ref": "#/$defs/text" }, "meaningEn": { "$ref": "#/$defs/text" },
+        "words": { "type": "array", "maxItems": 80, "items": { "$ref": "#/$defs/storyGloss" } }
+      }
+    },
+    "storyGloss": {
+      "type": "object", "additionalProperties": false, "required": ["text"], "properties": {
+        "text": { "$ref": "#/$defs/shortText" },
+        "meaningFa": { "$ref": "#/$defs/shortText" }, "meaningEn": { "$ref": "#/$defs/shortText" }
+      }
+    },
     "text": { "type": "string", "minLength": 1, "maxLength": 10000, "pattern": "\\S" },
     "shortText": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S" },
     "id": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
@@ -68,7 +98,8 @@
             "mimeType": { "enum": ["image/jpeg", "image/png", "image/webp"] },
             "sha256": { "$ref": "#/$defs/sha256" }
           }
-        }
+        },
+        "storyAudio": { "type": "object", "additionalProperties": false, "required": [ "path", "mimeType", "durationMs", "sha256" ], "properties": { "path": { "enum": [ "story.mp3", "story.m4a", "story.wav" ] }, "mimeType": { "enum": [ "audio/mpeg", "audio/mp4", "audio/wav" ] }, "durationMs": { "type": "integer", "minimum": 1, "maximum": 86400000 }, "sha256": { "$ref": "#/$defs/sha256" } } }
       }
     },
     "line": {
@@ -225,6 +256,8 @@
         "explanationFa": { "$ref": "#/$defs/text" },
         "explanationEn": { "$ref": "#/$defs/text" },
         "context": { "$ref": "#/$defs/text" },
+        "translationFa": { "$ref": "#/$defs/text" },
+        "translationEn": { "$ref": "#/$defs/text" },
         "lineId": { "$ref": "#/$defs/id" },
         "speech": { "$ref": "#/$defs/text" },
         "relatedLexemeIds": { "type": "array", "maxItems": 20, "uniqueItems": true, "items": { "$ref": "#/$defs/lexemeId" } }

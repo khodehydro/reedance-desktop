@@ -1,6 +1,5 @@
 node_modules/
 dist/
-release/
 out/
 *.log
 npm-debug.log*
@@ -9,8 +8,14 @@ Thumbs.db
 .env
 .env.*
 *.local
+
+# Real key material never lives in the repository
+enc-main.key
+enc-main-import.json
 coverage/
 .arena/
 
 .transport/
 *.exe
+*.zip
+!release/*.zip

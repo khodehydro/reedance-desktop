@@ -10,7 +10,7 @@ import { readZipStrict } from "../src/main/crypto/zip";
 import { closeDatabase, openDatabase } from "../src/main/db";
 import { runExport, runQuickExport, verifyExport } from "../src/main/exporter";
 import { importDraftFile } from "../src/main/import";
-import { generateTestKeys, getAesKey, getSigningPublicKey, listKeys } from "../src/main/keys";
+import { PACK_KEY_ID, SIGNING_KEY_ID, getAesKey, getSigningPublicKey, listKeys } from "../src/main/keys";
 import { importAudio, withMeasuredDuration } from "../src/main/media";
 import {
   approveProject,
@@ -136,27 +136,34 @@ test("full pipeline: approve, export, verify, statistics", () => {
   const report = preflight(projectId);
   assert.equal(report.canExport, true, JSON.stringify(report.gates.filter((gate) => !gate.ok)));
 
-  const keys = generateTestKeys();
-  encKeyId = keys.find((key) => key.kind === "enc")!.keyId;
-  sigKeyId = keys.find((key) => key.kind === "sig")!.keyId;
-  assert.ok(listKeys().length >= 2);
+  // Exports always use the keys embedded in the binary; there are no
+  // operator-managed keys and nothing to provision.
+  encKeyId = PACK_KEY_ID;
+  sigKeyId = SIGNING_KEY_ID;
+  assert.deepEqual(listKeys(), [], "the keystore surface is gone");
 
   const options = {
     encryptionKeyId: encKeyId,
     signatureKeyId: sigKeyId,
     displayVersion: "1.0.0",
     manifestBaseUrl: "https://content.example.com/reedance",
-    useTestKeys: true,
   };
 
-  assert.throws(() => runExport(projectId, { ...options, useTestKeys: false }, { archiveRoot }), /test/i);
+  assert.throws(
+    () => runExport(projectId, { ...options, encryptionKeyId: "enc-some-other-key" }, { archiveRoot }),
+    /embedded pack key/,
+  );
+  assert.throws(
+    () => runExport(projectId, { ...options, signatureKeyId: "sig-some-other-key" }, { archiveRoot }),
+    /embedded signing key/,
+  );
 
   outcome = runExport(projectId, options, { archiveRoot });
   assert.equal(outcome.versionCode, 1);
   assert.match(path.basename(outcome.packPath), /^v000001-[a-f0-9]{64}\.rdpack$/);
   assert.ok(fs.existsSync(outcome.packPath));
   assert.ok(fs.existsSync(outcome.manifestPath));
-  assert.equal(outcome.usedTestKeys, true);
+  assert.equal(outcome.usedTestKeys, false);
   if (process.platform !== "win32") assert.equal(fs.statSync(outcome.packPath).mode & 0o777, 0o444);
 
   const { lesson } = buildLessonForExport(projectId);
@@ -219,7 +226,6 @@ test("a second export reserves the next version code and keeps the first pack", 
       signatureKeyId: sigKeyId,
       displayVersion: "1.0.1",
       manifestBaseUrl: "https://content.example.com/reedance",
-      useTestKeys: true,
     },
     { archiveRoot },
   );
@@ -262,7 +268,6 @@ test("editing content keeps export possible but revokes the recorded approval an
           signatureKeyId: sigKeyId,
           displayVersion: "1.0.2",
           manifestBaseUrl: "https://content.example.com/reedance",
-          useTestKeys: true,
         },
         { archiveRoot },
       ),
@@ -311,12 +316,12 @@ test("one-click export needs nothing from the operator: keys and version are aut
     content,
   );
   const outcome = runQuickExport(projectId, {}, { archiveRoot });
-  assert.equal(outcome.usedTestKeys, true, "without a provisioned key the app uses the published test key");
+  assert.equal(outcome.usedTestKeys, false, "exports always use the embedded production keys");
   assert.ok(fs.existsSync(outcome.packPath));
   assert.equal(outcome.manifestUrlHint, "", "no hosting URL is required to export");
   const row = getProjectDetail(projectId).exports.find((item) => item.exportId === outcome.exportId);
   assert.equal(row?.encryptionKeyId, "enc-main", "one fixed distribution key, no password");
-  assert.match(row?.signatureKeyId ?? "", /^sig-studio-/);
+  assert.equal(row?.signatureKeyId, SIGNING_KEY_ID, "the embedded signing key is recorded");
   assert.equal(verifyExport(outcome.exportId).verified, true);
 
   const next = runQuickExport(projectId, {}, { archiveRoot });

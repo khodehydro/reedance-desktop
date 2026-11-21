@@ -28,9 +28,9 @@ export function registerMediaScheme(): void {
   ]);
 }
 
-function mimeFor(kind: "audio" | "cover", stored: string | undefined): string {
+function mimeFor(kind: "audio" | "cover" | "story-audio", stored: string | undefined): string {
   if (stored) return stored;
-  return kind === "audio" ? "audio/mpeg" : "image/jpeg";
+  return kind === "audio" ? "audio/mpeg" : kind === "cover" ? "image/jpeg" : "audio/mpeg";
 }
 
 export function registerMediaProtocol(): void {
@@ -40,15 +40,22 @@ export function registerMediaProtocol(): void {
       const segments = url.pathname.split("/").filter(Boolean);
       const kind = segments[0];
       const projectId = segments[1];
-      if (!projectId || (kind !== "audio" && kind !== "cover")) {
+      if (!projectId || (kind !== "audio" && kind !== "cover" && kind !== "story-audio")) {
         return new Response("not found", { status: 404 });
       }
       const media = readMedia(projectId);
       if (!media) return new Response("no media for this project", { status: 404 });
-      const file = kind === "audio" ? media.media.audioPath : media.media.coverPath;
+      const file =
+        kind === "audio" ? media.media.audioPath
+          : kind === "cover" ? media.media.coverPath
+            : media.media.storyAudioPath;
       if (!file || !fs.existsSync(file)) return new Response("media file missing", { status: 404 });
       const stat = fs.statSync(file);
-      const type = mimeFor(kind, kind === "audio" ? media.media.mimeType : media.media.coverMimeType);
+      const stored =
+        kind === "audio" ? media.media.mimeType
+          : kind === "cover" ? media.media.coverMimeType
+            : media.media.storyAudioMimeType;
+      const type = mimeFor(kind, stored);
       const range = request.headers.get("range");
       if (range) {
         const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());

@@ -8,14 +8,17 @@ import { CH } from "../src/shared/ipc";
 import { decryptPack, encryptPack, parsePackHeader, sha256Hex } from "../src/main/crypto/pack";
 import { buildZip } from "../src/main/crypto/zip";
 import {
+  EMBEDDED_PACK_KEY_HEX,
+  EMBEDDED_SIGNING_PUBLIC_KEY_HEX,
+} from "../src/main/crypto/appkey";
+import {
   PACK_KEY_ID,
-  TEST_PACK_KEY_LABEL,
+  SIGNING_KEY_ID,
   getAesKey,
   getPackKey,
+  getSigningPublicKey,
   isTestKey,
-  packKeyInfo,
-  parseKeyMaterial,
-  testPackKey,
+  listKeys,
 } from "../src/main/keys";
 
 const repo = path.join(__dirname, "..");
@@ -24,8 +27,6 @@ const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "reedance-handoff-test-"
 process.env.REEDANCE_STUDIO_ROOT = workspace;
 process.env.REEDANCE_SQL_WASM_DIR = path.join(repo, "node_modules", "sql.js", "dist");
 process.env.REEDANCE_CONTRACTS_DIR = path.join(repo, "contracts");
-
-const keyFile = path.join(workspace, "keys", "enc-main.key");
 
 function zipFixture(): Buffer {
   return buildZip([
@@ -42,35 +43,22 @@ test("the product has no password surface left", () => {
   assert.ok(!files.includes("pack-password.txt"), "the old password file must not be created");
 });
 
-test("a fresh install encrypts with the published test key so it works out of the box", () => {
+test("keys are embedded in the binary and there is no operator surface for them", () => {
   const key = getPackKey();
   assert.equal(key.length, 32);
-  assert.deepEqual(key, testPackKey());
-  assert.deepEqual(key, crypto.createHash("sha256").update(TEST_PACK_KEY_LABEL, "utf8").digest());
+  assert.equal(key.toString("hex"), EMBEDDED_PACK_KEY_HEX, "the pack key is the embedded constant");
   assert.equal(PACK_KEY_ID, "enc-main");
-  assert.equal(isTestKey(PACK_KEY_ID), true, "the bundled fallback is a test key");
-  const info = packKeyInfo();
-  assert.equal(info.keyId, "enc-main");
-  assert.equal(info.source, "test");
-  assert.equal(info.testOnly, true);
-  assert.match(info.fingerprint, /^[a-f0-9]{16}$/);
-  assert.ok(!fs.existsSync(keyFile), "reading the test key never writes a key file");
-});
-
-test("a real key is provisioned from the environment or a key file, with no password", () => {
-  const provisioned = crypto.randomBytes(32);
-  process.env.REEDANCE_ENC_MAIN_KEY = provisioned.toString("base64url");
-  assert.deepEqual(getAesKey(PACK_KEY_ID), provisioned);
-  assert.equal(isTestKey(PACK_KEY_ID), false);
-  assert.equal(packKeyInfo().source, "env");
-  delete process.env.REEDANCE_ENC_MAIN_KEY;
-
-  fs.mkdirSync(path.dirname(keyFile), { recursive: true });
-  fs.writeFileSync(keyFile, `${provisioned.toString("hex")}\n`, { mode: 0o600 });
-  assert.deepEqual(getAesKey(PACK_KEY_ID), provisioned);
-  assert.equal(packKeyInfo().source, "file");
-  assert.equal(packKeyInfo().testOnly, false);
-  if (process.platform !== "win32") assert.equal(fs.statSync(keyFile).mode & 0o777, 0o600);
+  assert.equal(SIGNING_KEY_ID, "sig-studio-embedded");
+  assert.equal(isTestKey(PACK_KEY_ID), false, "the embedded key is a production key, never a test key");
+  assert.deepEqual(listKeys(), [], "no key records are exposed to the renderer");
+  assert.deepEqual(
+    getSigningPublicKey(SIGNING_KEY_ID),
+    Buffer.from(EMBEDDED_SIGNING_PUBLIC_KEY_HEX, "hex"),
+    "the signing public key matches the published embedded constant",
+  );
+  // The keys module must not read or write any key material on disk.
+  const keysDir = path.join(workspace, "keys");
+  assert.ok(!fs.existsSync(keysDir), "reading the embedded keys never touches a keys directory");
 });
 
 test("a pack opens with the studio key alone: no secret is ever typed", () => {
@@ -103,22 +91,16 @@ test("an Android-compatible fixture pack decrypts here without any password", ()
   };
   const packName = fs.readdirSync(fixtures).find((file) => file.endsWith(".rdpack")) as string;
   const pack = fs.readFileSync(path.join(fixtures, packName));
-  const key = parseKeyMaterial(fixtureKeys.aes256KeyBase64url);
-  assert.ok(key && key.length === 32);
-  const { plaintext } = decryptPack(pack, key as Buffer);
+  const key = Buffer.from(fixtureKeys.aes256KeyBase64url, "base64url");
+  assert.equal(key.length, 32);
+  const { plaintext } = decryptPack(pack, key);
   assert.equal(sha256Hex(plaintext).length, 64);
   assert.equal(parsePackHeader(pack).keyId, fixtureKeys.encryptionKeyId);
   assert.ok(packName.startsWith("v000001-"), "pack names carry the version and the hash");
 });
 
-test("bad key material and unknown key ids fail loudly", () => {
-  assert.equal(parseKeyMaterial("not a key"), null);
-  assert.equal(parseKeyMaterial(Buffer.from("abc")), null);
-  assert.throws(() => getAesKey("enc-does-not-exist"), /not available/);
-
-  fs.writeFileSync(keyFile, "junk\n", { mode: 0o600 });
-  assert.throws(() => getPackKey(), /32-byte key/);
-  assert.match(packKeyInfo().error ?? "", /32-byte key/);
-  fs.rmSync(keyFile, { force: true });
-  assert.deepEqual(getPackKey(), testPackKey(), "removing the provisioned key falls back to test mode");
+test("unknown key ids fail loudly; the embedded key is the only one available", () => {
+  assert.throws(() => getAesKey("enc-does-not-exist"), /embedded pack key/);
+  assert.equal(getSigningPublicKey("sig-does-not-exist"), null, "an unknown signing key id yields no public key");
+  assert.equal(isTestKey("sig-does-not-exist"), false);
 });

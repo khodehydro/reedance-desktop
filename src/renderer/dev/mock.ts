@@ -144,6 +144,64 @@ function makeDemoContent(): DraftContent {
     disclaimerFa: "صدای این نمونه تولیدشده و بی‌کلام است و متن آن خوانده نشده است.",
     disclaimerEn: "The demo audio is instrumental; the lyrics are not sung.",
     lyrics: lines,
+    story: {
+      title: "A quiet night on the avenue",
+      pages: [
+        {
+          id: "page-1",
+          lines: [
+            {
+              id: "page-1-line-1",
+              text: "The street is empty after midnight.",
+              translationFa: "بعد از نیمه‌شب خیابان خالی است.",
+              translationEn: "The street is empty after midnight.",
+              tokens: [
+                { surface: "The", translationFa: "—", translationEn: "the" },
+                { surface: "street", translationFa: "خیابان", translationEn: "street", lexemeId: "en:room" },
+                { surface: "is", translationFa: "است", translationEn: "is" },
+                { surface: "empty", translationFa: "خالی", translationEn: "empty", lexemeId: "en:empty" },
+                { surface: "after", translationFa: "بعد از", translationEn: "after" },
+                { surface: "midnight.", translationFa: "نیمه‌شب.", translationEn: "midnight", lexemeId: "en:midnight" },
+              ],
+            },
+            {
+              id: "page-1-line-2",
+              text: "A lone figure keeps the light on.",
+              translationFa: "شخصی تنها نور را روشن نگه می‌دارد.",
+              translationEn: "A lone figure keeps the light on.",
+              tokens: [
+                { surface: "A", translationFa: "یک", translationEn: "a" },
+                { surface: "lone", translationFa: "تنها", translationEn: "lone" },
+                { surface: "figure", translationFa: "شخص", translationEn: "figure" },
+                { surface: "keeps", translationFa: "نگه می‌دارد", translationEn: "keeps", lexemeId: "en:keep" },
+                { surface: "the", translationFa: "—", translationEn: "the" },
+                { surface: "light", translationFa: "نور", translationEn: "light", lexemeId: "en:light" },
+                { surface: "on.", translationFa: "روشن.", translationEn: "on" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "page-2",
+          lines: [
+            {
+              id: "page-2-line-1",
+              text: "Every quiet step is a promise.",
+              translationFa: "هر قدم آرام یک وعده است.",
+              translationEn: "Every calm step is a promise.",
+              tokens: [
+                { surface: "Every", translationFa: "هر", translationEn: "every" },
+                { surface: "quiet", translationFa: "آرام", translationEn: "calm", lexemeId: "en:quiet" },
+                { surface: "step", translationFa: "قدم", translationEn: "step", lexemeId: "en:step" },
+                { surface: "is", translationFa: "است", translationEn: "is" },
+                { surface: "a", translationFa: "یک", translationEn: "a" },
+                { surface: "promise.", translationFa: "وعده.", translationEn: "promise", lexemeId: "en:promise" },
+              ],
+            },
+          ],
+        },
+      ],
+    },
     vocabulary: [
       {
         lexemeId: "en:quiet",
@@ -444,7 +502,7 @@ export function createMockBridge(): StudioApi {
     audioCredit: "",
     coverCredit: "",
   };
-  const media: MediaInfo = {
+  let media: MediaInfo = {
     audioPath: "browser-preview://midnight-avenue/audio.wav",
     audioFileName: "audio.wav",
     audioSha256: "4d3b8a6f1e2c9a7b5d8e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e",
@@ -467,26 +525,6 @@ export function createMockBridge(): StudioApi {
   let approvedBy: string | null = null;
   let exportsList: ExportSummary[] = [];
   let settings = { ...SETTINGS };
-  const keys: KeyRecord[] = [
-    {
-      keyId: "enc-test-preview",
-      kind: "enc",
-      createdAt: NOW,
-      testOnly: true,
-      protection: "none",
-      fingerprint: "0a1b2c3d4e5f6071",
-    },
-    {
-      keyId: "sig-test-preview",
-      kind: "sig",
-      createdAt: NOW,
-      testOnly: true,
-      protection: "none",
-      publicKeyBase64url: "preview-pinned-public-key",
-      fingerprint: "1f2e3d4c5b6a7988",
-    },
-  ];
-
   const lineHash = (line: DraftContent["lyrics"][number]): string =>
     JSON.stringify([line.text, line.translationFa, line.translationEn, line.tokens]);
 
@@ -651,8 +689,6 @@ export function createMockBridge(): StudioApi {
         dataDir: "(browser preview) memory only",
         archiveDir: settings.archiveDir,
         safeStorage: false,
-        keyCount: keys.length,
-        testKeysOnly: true,
       }),
       rescan: async () => ({ scanned: 0, present: 0, missing: [], orphans: [], warnings: ["Browser preview: no archive folder."] }),
       openExternal: async () => undefined,
@@ -688,9 +724,18 @@ export function createMockBridge(): StudioApi {
       selectAudio: async () => ({ media, warnings: [], durationSource: "container" }),
       selectCover: async () => ({ media, warnings: [], durationSource: "container" }),
       removeCover: async () => ({ media, warnings: [], durationSource: "container" }),
+      selectStoryAudio: async () => {
+        media = { ...media, storyAudioFileName: "story.mp3", storyAudioDurationMs: 42_000, storyAudioBytes: 1_048_576, storyAudioMimeType: "audio/mpeg", storyAudioSha256: media.audioSha256, storyAudioExtension: "mp3", storyAudioPath: media.audioPath };
+        return { media, warnings: [], durationSource: "container" as const };
+      },
+      removeStoryAudio: async () => {
+        media = { ...media, storyAudioFileName: undefined, storyAudioDurationMs: undefined, storyAudioBytes: undefined, storyAudioMimeType: undefined, storyAudioSha256: undefined, storyAudioExtension: undefined, storyAudioPath: undefined };
+        return { media, warnings: [], durationSource: "container" as const };
+      },
       reportDuration: async () => ({ media, warnings: [], durationSource: "container" }),
-      playUrl: async () => audioUrl,
+      playUrl: async (_projectId, kind) => (kind === "cover" ? null : audioUrl),
       bytes: async () => audioBlob.arrayBuffer(),
+      speak: async () => true,
     },
     marks: {
       distribute: async () => {
@@ -763,19 +808,6 @@ export function createMockBridge(): StudioApi {
         publishedAt: new Date().toISOString(),
       }),
       openFolder: async () => undefined,
-    },
-    keys: {
-      list: async () => keys,
-      generateTest: async () => keys,
-      importFromFile: async () => keys,
-      backup: async () => null,
-      info: async () => ({
-        keyId: "enc-main",
-        source: "test",
-        testOnly: true,
-        fingerprint: "preview-test-key",
-        keyFile: "(browser preview) no key file",
-      }),
     },
     stats: {
       get: async (scope): Promise<StatsReport> => ({

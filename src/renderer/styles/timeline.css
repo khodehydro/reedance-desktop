@@ -2,6 +2,18 @@
   gap: 12px;
 }
 
+/*
+ * Time is a left-to-right quantity: the axis, the seek bar, the playhead and
+ * the capture line all advance from the left edge to the right edge, no matter
+ * that the surrounding UI is RTL.
+ */
+.timeline-ltr {
+  direction: ltr;
+  unicode-bidi: embed;
+  display: grid;
+  gap: 10px;
+}
+
 .transport {
   display: flex;
   align-items: center;
@@ -11,7 +23,7 @@
   padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(16, 29, 49, 0.72);
+  background: var(--surface-low);
 }
 
 .transport-left,
@@ -35,12 +47,74 @@
   accent-color: var(--accent);
 }
 
+.step-group {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-low);
+}
+
+/* The simple seek bar: one slider for the whole audio, plus the axis labels. */
+.seek-bar {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-low);
+  padding: 10px 14px 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.seek-range {
+  width: 100%;
+  height: 6px;
+  appearance: none;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill, 0%), var(--surface-bright) var(--fill, 0%), var(--surface-bright) 100%);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.seek-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  transition: transform 120ms ease;
+}
+
+.seek-range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.seek-range::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+.seek-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
 .wave-scroll {
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
-  background: #071120;
+  background: #0e0e0e;
   box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
 }
 
@@ -63,7 +137,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  inset-inline-start: 0;
+  left: 0;
   width: 2px;
   background: linear-gradient(180deg, #ffd66e, #ff9d57);
   box-shadow: 0 0 12px rgba(255, 200, 110, 0.7);
@@ -75,10 +149,56 @@
   content: "";
   position: absolute;
   top: 0;
-  inset-inline-start: -4px;
-  border-inline-start: 5px solid transparent;
-  border-inline-end: 5px solid transparent;
+  left: -4px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
   border-top: 7px solid #ffd66e;
+}
+
+/* The draggable capture line: drag it (or click the waveform) to place a
+   time, then register line times at its position. */
+.drag-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: linear-gradient(180deg, var(--accent), rgba(155, 196, 255, 0.35));
+  box-shadow: 0 0 10px rgba(155, 196, 255, 0.55);
+  cursor: ew-resize;
+  touch-action: none;
+  will-change: transform;
+}
+
+.drag-handle {
+  position: absolute;
+  top: -2px;
+  left: -14px;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #0b1220;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  user-select: none;
+}
+
+.timeline-compact {
+  gap: 8px;
+}
+
+.timeline-compact .transport {
+  padding: 7px 10px;
+}
+
+.timeline-compact .step-group {
+  display: none;
 }
 
 .line-table {
@@ -102,7 +222,7 @@
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--muted);
-  background: rgba(8, 17, 31, 0.7);
+  background: var(--surface-low);
   border-bottom: 1px solid var(--line);
 }
 

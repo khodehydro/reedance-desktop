@@ -239,6 +239,37 @@ export function importAudio(projectId: string, sourcePath: string, previous: Med
   };
 }
 
+/**
+ * Copy the operator-selected story narration audio into the immutable project
+ * folder as `story.<ext>`. Same rules as the song audio: the project copy is
+ * what gets exported, the container is sniffed from magic bytes and the
+ * duration comes from the container header when parseable.
+ */
+export function importStoryAudio(projectId: string, sourcePath: string, previous: MediaInfo): MediaInfo {
+  const buffer = readFileLimited(sourcePath, AUDIO_MAX_BYTES);
+  const probe = probeAudio(buffer, path.basename(sourcePath));
+  const sha = hashFile(buffer);
+  const dir = projectDir(projectId);
+  fs.mkdirSync(dir, { recursive: true });
+  const target = assertInside(dir, path.join(dir, `story.${probe.extension}`));
+  writeFileAtomic(target, buffer, 0o444);
+  for (const extension of ["mp3", "m4a", "wav"] as const) {
+    if (extension === probe.extension) continue;
+    const stale = path.join(dir, `story.${extension}`);
+    if (fs.existsSync(stale)) fs.rmSync(stale, { force: true });
+  }
+  return {
+    ...previous,
+    storyAudioPath: target,
+    storyAudioFileName: `story.${probe.extension}`,
+    storyAudioSha256: sha,
+    storyAudioMimeType: probe.mimeType,
+    storyAudioExtension: probe.extension,
+    storyAudioDurationMs: probe.durationMs ?? previous.storyAudioDurationMs ?? 0,
+    storyAudioBytes: buffer.length,
+  };
+}
+
 export function importCover(projectId: string, sourcePath: string, media: MediaInfo): MediaInfo {
   const buffer = readFileLimited(sourcePath, COVER_MAX_BYTES);
   const extension = sniffCover(buffer);

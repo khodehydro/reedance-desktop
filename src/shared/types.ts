@@ -69,6 +69,54 @@ export interface LyricLine {
   tokens: Token[];
 }
 
+/**
+ * A story is a second, shorter text that ships with every song. It mirrors the
+ * Android story reader (`SongStory.kt`): title + pages, and every line carries
+ * its own line translation plus word-by-word glosses. The studio edits the
+ * same four things a lyric line has (text / translation FA / translation EN /
+ * tokens) and additionally can speak the page text with the OS voice.
+ */
+export interface StoryLine {
+  id: string;
+  text: string;
+  translationFa: string;
+  translationEn: string;
+  tokens: Token[];
+}
+
+export interface StoryPage {
+  id: string;
+  lines: StoryLine[];
+}
+
+export interface StoryDraft {
+  title: string;
+  pages: StoryPage[];
+}
+
+/** Story shape written into the published `lesson.json` (read by Android). */
+export interface LessonStoryGloss {
+  text: string;
+  meaningFa: string;
+  meaningEn: string;
+}
+
+export interface LessonStoryLine {
+  text: string;
+  meaningFa: string;
+  meaningEn: string;
+  words: LessonStoryGloss[];
+}
+
+export interface LessonStoryPage {
+  lines: LessonStoryLine[];
+}
+
+export interface LessonStory {
+  title: string;
+  pages: LessonStoryPage[];
+}
+
 export interface CellObject {
   fa: string;
   en: string;
@@ -241,6 +289,7 @@ export interface DraftContent {
   disclaimerFa?: string;
   disclaimerEn?: string;
   lyrics: LyricLine[];
+  story?: StoryDraft;
   vocabulary: Word[];
   grammar: GrammarItem[];
   idioms: Phrase[];
@@ -265,6 +314,13 @@ export interface MediaInfo {
   coverMimeType?: string;
   coverExtension?: "jpg" | "png" | "webp";
   coverBytes?: number;
+  storyAudioPath?: string;
+  storyAudioFileName?: string;
+  storyAudioSha256?: string;
+  storyAudioMimeType?: string;
+  storyAudioExtension?: "mp3" | "m4a" | "wav";
+  storyAudioDurationMs?: number;
+  storyAudioBytes?: number;
 }
 
 export interface LessonCredits {
@@ -276,7 +332,7 @@ export interface LessonCredits {
 }
 
 export interface LessonAudio {
-  path: "audio.mp3" | "audio.m4a" | "audio.wav";
+  path: "audio.mp3" | "audio.m4a" | "audio.wav" | "story.mp3" | "story.m4a" | "story.wav";
   mimeType: "audio/mpeg" | "audio/mp4" | "audio/wav";
   durationMs: number;
   sha256: string;
@@ -300,8 +356,9 @@ export interface Lesson {
   disclaimerFa?: string;
   disclaimerEn?: string;
   credits: LessonCredits;
-  media: { audio: LessonAudio; cover?: LessonCover };
+  media: { audio: LessonAudio; cover?: LessonCover; storyAudio?: LessonAudio };
   lyrics: (Omit<LyricLine, never> & { startMs: number; endMs?: number })[];
+  story?: LessonStory;
   vocabulary: Word[];
   grammar: GrammarItem[];
   idioms: Phrase[];
@@ -585,8 +642,6 @@ export interface AppInfo {
   dataDir: string;
   archiveDir: string;
   safeStorage: boolean;
-  keyCount: number;
-  testKeysOnly: boolean;
 }
 
 export interface StagedBundle {
@@ -659,9 +714,16 @@ export interface StudioApi {
     selectAudio(projectId: string): Promise<MediaOutcome | null>;
     selectCover(projectId: string): Promise<MediaOutcome | null>;
     removeCover(projectId: string): Promise<MediaOutcome>;
-    reportDuration(projectId: string, durationMs: number): Promise<MediaOutcome>;
-    playUrl(projectId: string, kind: "audio" | "cover"): Promise<string | null>;
-    bytes(projectId: string, kind: "audio" | "cover"): Promise<ArrayBuffer | null>;
+    selectStoryAudio(projectId: string): Promise<MediaOutcome | null>;
+    removeStoryAudio(projectId: string): Promise<MediaOutcome>;
+    reportDuration(projectId: string, durationMs: number, kind?: "audio" | "story-audio"): Promise<MediaOutcome>;
+    playUrl(projectId: string, kind: "audio" | "cover" | "story-audio"): Promise<string | null>;
+    bytes(projectId: string, kind: "audio" | "cover" | "story-audio"): Promise<ArrayBuffer | null>;
+    /**
+     * Speak `text` with the OS voice. Used by the story editor to preview the
+     * narration of a story page; never writes or transmits anything.
+     */
+    speak(input: { text: string; lang: string }): Promise<boolean>;
   };
   marks: {
     save(projectId: string, marks: { lineId: string; startMs: number | null; endMs: number | null }[]): Promise<ProjectDetail>;
@@ -690,14 +752,6 @@ export interface StudioApi {
     stage(exportId: string): Promise<StagedBundle | null>;
     publish(exportId: string, manifestUrl: string): Promise<PublicationOutcome>;
     openFolder(exportId: string): Promise<void>;
-  };
-  keys: {
-    list(): Promise<KeyRecord[]>;
-    generateTest(): Promise<KeyRecord[]>;
-    importFromFile(): Promise<KeyRecord[]>;
-    backup(passphrase: string): Promise<string | null>;
-    /** Which key encrypts packs. There is no password in this product. */
-    info(): Promise<PackKeyInfo>;
   };
   stats: {
     get(scope: StatsScope): Promise<StatsReport>;

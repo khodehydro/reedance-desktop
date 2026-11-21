@@ -47,9 +47,12 @@ const api: StudioApi = {
     selectAudio: (projectId) => ipcRenderer.invoke(CH.mediaSelectAudio, projectId),
     selectCover: (projectId) => ipcRenderer.invoke(CH.mediaSelectCover, projectId),
     removeCover: (projectId) => ipcRenderer.invoke(CH.mediaRemoveCover, projectId),
-    reportDuration: (projectId, durationMs) => ipcRenderer.invoke(CH.mediaReportDuration, projectId, durationMs),
+    selectStoryAudio: (projectId) => ipcRenderer.invoke(CH.mediaSelectStoryAudio, projectId),
+    removeStoryAudio: (projectId) => ipcRenderer.invoke(CH.mediaRemoveStoryAudio, projectId),
+    reportDuration: (projectId, durationMs, kind) => ipcRenderer.invoke(CH.mediaReportDuration, projectId, durationMs, kind),
     playUrl: (projectId, kind) => ipcRenderer.invoke(CH.mediaPlayUrl, projectId, kind),
     bytes: (projectId, kind) => ipcRenderer.invoke(CH.mediaBytes, projectId, kind),
+    speak: (input) => ipcRenderer.invoke(CH.mediaSpeak, input),
   },
   marks: {
     save: (projectId, marks) => ipcRenderer.invoke(CH.marksSave, projectId, marks),
@@ -68,13 +71,6 @@ const api: StudioApi = {
     stage: (exportId) => ipcRenderer.invoke(CH.exportStage, exportId),
     publish: (exportId, manifestUrl) => ipcRenderer.invoke(CH.exportPublish, exportId, manifestUrl),
     openFolder: (exportId) => ipcRenderer.invoke(CH.exportOpenFolder, exportId),
-  },
-  keys: {
-    list: () => ipcRenderer.invoke(CH.keysList),
-    generateTest: () => ipcRenderer.invoke(CH.keysGenerateTest),
-    importFromFile: () => ipcRenderer.invoke(CH.keysImport),
-    backup: (passphrase) => ipcRenderer.invoke(CH.keysBackup, passphrase),
-    info: () => ipcRenderer.invoke(CH.keysInfo),
   },
   stats: {
     get: (scope) => ipcRenderer.invoke(CH.statsGet, scope),

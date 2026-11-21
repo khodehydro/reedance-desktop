@@ -178,6 +178,37 @@ export function validateContentSemantics(content: DraftContent): Issue[] {
     }
   });
 
+  if (content.story) {
+    const draftPages = content.story.pages as { id?: string; lines: { id?: string; text: string; tokens?: { surface: string }[]; words?: { text: string }[] }[] }[];
+    draftPages.forEach((page, pageIndex) => {
+      if (page.id !== undefined && !ID_RE.test(page.id)) {
+        issues.push({ path: `story.pages[${pageIndex}].id`, message: `page id "${page.id}" is not a valid slug`, severity: "error" });
+      }
+      const namedLines = page.lines.filter((line) => line.id !== undefined) as { id: string }[];
+      issues.push(...duplicateIds(`story.pages[${pageIndex}].lines`, namedLines));
+      page.lines.forEach((line, lineIndex) => {
+        const path = `story.pages[${pageIndex}].lines[${lineIndex}]`;
+        if (line.id !== undefined && !ID_RE.test(line.id)) {
+          issues.push({ path: `${path}.id`, message: `story line id "${line.id}" is not a valid slug`, severity: "error" });
+        }
+        const glosses = (line.tokens ?? line.words ?? []) as { surface?: string; text?: string }[];
+        const joined = glosses
+          .map((gloss) => gloss.surface ?? gloss.text ?? "")
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+        const text = line.text.replace(/\s+/g, " ").trim();
+        if (joined && text && joined.toLocaleLowerCase() !== text.toLocaleLowerCase()) {
+          issues.push({
+            path: `${path}.tokens`,
+            message: "token surfaces do not reconstruct the story line text; check for a missing or extra token",
+            severity: "warning",
+          });
+        }
+      });
+    });
+  }
+
   content.vocabulary.forEach((word, index) => {
     if (!LEXEME_RE.test(word.lexemeId)) {
       issues.push({ path: `vocabulary[${index}].lexemeId`, message: `lexemeId "${word.lexemeId}" must look like "${lang}:slug"`, severity: "error" });
@@ -487,6 +518,15 @@ export function validateLessonSemantics(lesson: Lesson, mediaDurationMs: number,
   if (!lesson.credits?.lyrics?.trim()) issues.push({ path: "credits.lyrics", message: "lyrics credit is required", severity: "error" });
   if (lesson.media.cover && !lesson.credits?.cover?.trim()) {
     issues.push({ path: "credits.cover", message: "a cover is included but credits.cover is empty", severity: "error" });
+  }
+  if (lesson.media.storyAudio) {
+    const story = lesson.media.storyAudio;
+    if (!Number.isInteger(story.durationMs) || story.durationMs < 1 || story.durationMs > 86400000) {
+      issues.push({ path: "media.storyAudio.durationMs", message: "story audio duration must be between 1 ms and 24 h", severity: "error" });
+    }
+    if (!/^story\.(mp3|m4a|wav)$/.test(story.path)) {
+      issues.push({ path: "media.storyAudio.path", message: "story audio path must be story.mp3, story.m4a or story.wav", severity: "error" });
+    }
   }
   return issues;
 }

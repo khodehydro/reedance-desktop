@@ -372,5 +372,94 @@
         "hope"
       ]
     }
-  ]
+  ],
+  "story": {
+    "title": "The quiet step",
+    "pages": [
+      {
+        "id": "page-1",
+        "lines": [
+          {
+            "id": "story-line-1",
+            "text": "One quiet step starts the night.",
+            "translationFa": "یک قدم آرام شب را شروع می‌کند.",
+            "translationEn": "One calm step begins the night.",
+            "tokens": [
+              {
+                "surface": "One",
+                "translationFa": "یک",
+                "translationEn": "one"
+              },
+              {
+                "surface": "quiet",
+                "translationFa": "آرام",
+                "translationEn": "calm",
+                "lexemeId": "en:quiet"
+              },
+              {
+                "surface": "step",
+                "translationFa": "قدم",
+                "translationEn": "step",
+                "lexemeId": "en:step"
+              },
+              {
+                "surface": "starts",
+                "translationFa": "شروع می‌کند",
+                "translationEn": "begins"
+              },
+              {
+                "surface": "the",
+                "translationFa": "—",
+                "translationEn": "the"
+              },
+              {
+                "surface": "night.",
+                "translationFa": "شب.",
+                "translationEn": "night"
+              }
+            ]
+          },
+          {
+            "id": "story-line-2",
+            "text": "Hope stays alive in the dark.",
+            "translationFa": "امید در تاریکی زنده می‌ماند.",
+            "translationEn": "Hope remains alive in the dark.",
+            "tokens": [
+              {
+                "surface": "Hope",
+                "translationFa": "امید",
+                "translationEn": "hope",
+                "lexemeId": "en:hope"
+              },
+              {
+                "surface": "stays",
+                "translationFa": "می‌ماند",
+                "translationEn": "remains"
+              },
+              {
+                "surface": "alive",
+                "translationFa": "زنده",
+                "translationEn": "alive"
+              },
+              {
+                "surface": "in",
+                "translationFa": "در",
+                "translationEn": "in"
+              },
+              {
+                "surface": "the",
+                "translationFa": "—",
+                "translationEn": "the"
+              },
+              {
+                "surface": "dark.",
+                "translationFa": "تاریکی.",
+                "translationEn": "the dark"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
 }

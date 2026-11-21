@@ -1,4 +1,13 @@
-import type { DraftContent, Lesson, LyricMark, MediaInfo, RightsChecklist } from "../shared/types";
+import type {
+  DraftContent,
+  Lesson,
+  LessonStoryGloss,
+  LessonStoryLine,
+  LyricMark,
+  MediaInfo,
+  RightsChecklist,
+  Token,
+} from "../shared/types";
 
 /**
  * Pure conversion from the editable project to the published `lesson.json`.
@@ -51,6 +60,16 @@ export function assembleLesson(input: {
             },
           }
         : {}),
+      ...(media.storyAudioPath && media.storyAudioSha256 && media.storyAudioMimeType && media.storyAudioExtension
+        ? {
+            storyAudio: {
+              path: `story.${media.storyAudioExtension}` as NonNullable<Lesson["media"]["storyAudio"]>["path"],
+              mimeType: media.storyAudioMimeType as NonNullable<Lesson["media"]["storyAudio"]>["mimeType"],
+              durationMs: Math.round(media.storyAudioDurationMs ?? 0),
+              sha256: media.storyAudioSha256,
+            },
+          }
+        : {}),
     },
     lyrics: content.lyrics.map((line) => {
       const mark = byLine.get(line.id);
@@ -65,6 +84,20 @@ export function assembleLesson(input: {
         tokens: line.tokens,
       };
     }),
+    ...(content.story && content.story.pages.length > 0
+      ? {
+          story: {
+            title: content.story.title.trim(),
+            pages: content.story.pages
+              .map((page) => ({
+                lines: (page.lines ?? [])
+                  .filter((line) => line.text.trim().length > 0)
+                  .map((line) => storyLineToLessonLine(line)),
+              }))
+              .filter((page) => page.lines.length > 0),
+          },
+        }
+      : {}),
     vocabulary: content.vocabulary,
     grammar: content.grammar,
     idioms: content.idioms,
@@ -72,5 +105,32 @@ export function assembleLesson(input: {
     vocabularyTables: content.vocabularyTables,
     questions: content.questions,
     ...(content.idAliases?.length ? { idAliases: content.idAliases } : {}),
+  };
+}
+
+/**
+ * Published story lines use the Android contract shape: `meaning` translations
+ * are named `meaningFa`/`meaningEn` and the word glosses keep their own
+ * two translations, mirroring `contracts/v1/lesson.schema.json#/$defs/storyLine`.
+ */
+function storyGlossToLessonGloss(token: Token): LessonStoryGloss {
+  return {
+    text: token.surface,
+    meaningFa: token.translationFa,
+    meaningEn: token.translationEn,
+  };
+}
+
+function storyLineToLessonLine(line: {
+  text: string;
+  translationFa: string;
+  translationEn: string;
+  tokens?: Token[];
+}): LessonStoryLine {
+  return {
+    text: line.text,
+    meaningFa: line.translationFa,
+    meaningEn: line.translationEn,
+    words: (line.tokens ?? []).map(storyGlossToLessonGloss),
   };
 }

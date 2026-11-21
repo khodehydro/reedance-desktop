@@ -1,27 +1,14 @@
 import React, { useEffect, useState } from "react";
-import type { AppInfo, PackKeyInfo, Settings, ThemeMode } from "@shared/types";
+import type { AppInfo, Settings, ThemeMode } from "@shared/types";
 import { api } from "../api";
 import { useLang } from "../i18n";
 import { formatDate } from "../format";
-import { Badge, Button, Callout, CopyButton, Field, KeyValue, Mono, Section, TextInput, useToast } from "./ui";
-
-function keySourceLabel(source: PackKeyInfo["source"] | undefined, t: (fa: string, en: string) => string): string {
-  switch (source) {
-    case "env":
-      return t("متغیر محیطی", "environment variable");
-    case "file":
-      return t("فایل کلید", "key file");
-    case "keystore":
-      return t("کلید واردشده در برنامه", "key imported into the app");
-    default:
-      return t("کلید تستی همراه برنامه", "test key bundled with the app");
-  }
-}
+import { Button, Callout, Field, KeyValue, Mono, Section, TextInput, useToast } from "./ui";
 
 /**
  * Settings stays small on purpose: language, appearance, where exports go and
- * an optional hosting base URL. Key material is provisioned and rotated by the
- * app, so there is nothing to configure or confirm here.
+ * an optional hosting base URL. The export encryption and signing keys are
+ * embedded in the app itself; the operator never sees or manages them.
  */
 export function SettingsPage({
   info,
@@ -41,11 +28,6 @@ export function SettingsPage({
   const [archiveDir, setArchiveDir] = useState(settings?.archiveDir ?? "");
   const [manifestBase, setManifestBase] = useState(settings?.defaultManifestBaseUrl ?? "");
   const [busy, setBusy] = useState(false);
-  const [keyInfo, setKeyInfo] = useState<PackKeyInfo | null>(null);
-
-  useEffect(() => {
-    void api.keys.info().then(setKeyInfo);
-  }, []);
 
   useEffect(() => {
     if (settings) {
@@ -157,74 +139,6 @@ export function SettingsPage({
             {t("ذخیره", "Save")}
           </Button>
         </div>
-      </Section>
-
-      <Section
-        title={t("کلید رمزنگاری فایل‌ها", "File encryption key")}
-        description={t(
-          "در این برنامه هیچ رمزی وجود ندارد. ویندوز هر بسته را با یک کلید ثابت به نام enc-main می‌سازد و اپ اندروید همان کلید را دارد، پس فایل را خودش باز می‌کند.",
-          "There is no password anywhere. Windows encrypts every pack with one fixed key named enc-main, and the Android app already carries that key, so it opens the file on its own.",
-        )}
-      >
-        <div className="key-box">
-          <div className="key-value">
-            <span className="tiny muted">{t("شناسهٔ کلید", "key id")}</span>
-            <Mono>{keyInfo?.keyId ?? "enc-main"}</Mono>
-            <Badge tone={keyInfo && !keyInfo.testOnly ? "ok" : "warn"}>
-              {keyInfo && !keyInfo.testOnly
-                ? t("کلید نصب‌شده", "provisioned key")
-                : t("کلید تستی", "test key")}
-            </Badge>
-          </div>
-          <KeyValue
-            items={[
-              {
-                label: t("منبع کلید", "key source"),
-                value: keySourceLabel(keyInfo?.source, t),
-              },
-              { label: t("اثر انگشت", "fingerprint"), value: keyInfo?.fingerprint || "—", mono: true },
-            ]}
-          />
-          <div className="row gap-sm wrap">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={async () => {
-                try {
-                  await api.keys.importFromFile();
-                  setKeyInfo(await api.keys.info());
-                  toast.push(t("کلید بارگذاری شد.", "Key loaded."), "ok");
-                } catch (error) {
-                  toast.push(error instanceof Error ? error.message : String(error), "bad");
-                }
-              }}
-            >
-              {t("وارد کردن فایل کلید", "Import key file")}
-            </Button>
-            <CopyButton value={keyInfo?.keyId ?? "enc-main"} label={t("کپی شناسهٔ کلید", "Copy key id")} />
-          </div>
-        </div>
-
-        {keyInfo?.testOnly ? (
-          <Callout tone="warn" title={t("فعلاً با کلید تستی کار می‌کند", "Working with the test key for now")}>
-            {t(
-              "این کلید عمومی است و فقط برای آزمایش است. برای انتشار، فایل کلید واقعی را از مالک پروژه بگیرید و با دکمهٔ بالا وارد کنید؛ از آن به بعد همهٔ خروجی‌ها با کلید انتشار رمز می‌شوند. کلید واقعی هرگز در گیت یا نصاب گذاشته نمی‌شود.",
-              "This key is public and meant for testing only. Before publishing, get the real key file from the project owner and load it with the button above; every later export is encrypted with it. The real key is never committed to Git or bundled in the installer.",
-            )}
-          </Callout>
-        ) : (
-          <Callout tone="ok" title={t("کلید انتشار فعال است", "Publishing key is active")}>
-            {t(
-              "خروجی‌ها با کلید واقعی پروژه رمز می‌شوند؛ اندروید بدون هیچ رمزی آن‌ها را باز می‌کند.",
-              "Exports are encrypted with the project's real key; Android opens them without any password.",
-            )}
-          </Callout>
-        )}
-        {keyInfo?.error ? <Callout tone="bad" title={t("کلید خوانده نشد", "Key could not be read")}>{keyInfo.error}</Callout> : null}
-        <p className="tiny muted">
-          {t("فایل کلید در این مسیر هم پذیرفته می‌شود:", "A key file in this location works too:")}{" "}
-          <Mono>{keyInfo?.keyFile ?? "keys/enc-main.key"}</Mono>
-        </p>
       </Section>
 
       <Section title={t("دربارهٔ برنامه", "About")}>

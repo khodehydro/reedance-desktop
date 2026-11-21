@@ -9,7 +9,7 @@ import type {
   PreflightReport,
 } from "../shared/types";
 import { audit, flushNow, get, run, scalar, transaction } from "./db";
-import { ensureStudioKeys, getAesKey, getSigningPrivateKey, getSigningPublicKey, isTestKey } from "./keys";
+import { ensureStudioKeys, getAesKey, getSigningPrivateKey, getSigningPublicKey, PACK_KEY_ID, SIGNING_KEY_ID } from "./keys";
 import { assertInside, writeFileAtomic } from "./paths";
 import { EXPORT_GATES, buildLessonForExport, exportRow, loadProject, preflight, readMedia, readPayload } from "./projects";
 import { nowIso, sha256Hex } from "./util";
@@ -26,7 +26,6 @@ export interface ExportOptions {
   signatureKeyId: string;
   displayVersion: string;
   manifestBaseUrl: string;
-  useTestKeys: boolean;
 }
 
 export interface ExportContext {
@@ -75,7 +74,6 @@ export function runQuickExport(projectId: string, input: QuickExportInput, conte
       signatureKeyId,
       displayVersion: /^\d+\.\d+\.\d+$/.test(requested) ? requested : "1.0.0",
       manifestBaseUrl: (input.manifestBaseUrl ?? "").trim(),
-      useTestKeys: isTestKey(encryptionKeyId) || isTestKey(signatureKeyId),
     },
     context,
   );
@@ -110,9 +108,13 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
   if (options.manifestBaseUrl && !options.manifestBaseUrl.startsWith("https://")) {
     throw new Error("manifest base URL must be https, or empty when nothing is hosted yet");
   }
-  const testKeys = isTestKey(options.encryptionKeyId) || isTestKey(options.signatureKeyId);
-  if (testKeys && !options.useTestKeys) {
-    throw new Error("test-only keys are selected; confirm the test-key checkbox to continue");
+  // The pack key is embedded in the binary; a released pack must carry the
+  // embedded key id. Any other id can never be opened by the Android app.
+  if (options.encryptionKeyId !== PACK_KEY_ID) {
+    throw new Error(`packs must use the embedded pack key ${PACK_KEY_ID}`);
+  }
+  if (options.signatureKeyId !== SIGNING_KEY_ID) {
+    throw new Error(`packs must use the embedded signing key ${SIGNING_KEY_ID}`);
   }
 
   const { lesson, media } = buildLessonForExport(projectId);
@@ -134,14 +136,25 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
     {
       name: `audio.${media.extension}` as "audio.mp3" | "audio.m4a" | "audio.wav",
       data: audioBytes,
-      compress: false,
+      compress: true,
     },
   ];
   if (media.coverPath && media.coverExtension) {
     entries.push({
       name: `cover.${media.coverExtension}` as "cover.jpg" | "cover.png" | "cover.webp",
       data: fs.readFileSync(media.coverPath),
-      compress: false,
+      compress: true,
+    });
+  }
+  if (media.storyAudioPath && media.storyAudioExtension && media.storyAudioSha256) {
+    const storyBytes = fs.readFileSync(media.storyAudioPath);
+    if (sha256Hex(storyBytes) !== media.storyAudioSha256) {
+      throw new Error("the project story audio copy changed after import; re-select the story audio");
+    }
+    entries.push({
+      name: `story.${media.storyAudioExtension}` as "story.mp3" | "story.m4a" | "story.wav",
+      data: storyBytes,
+      compress: true,
     });
   }
   const zip = buildZip(entries);
@@ -239,7 +252,7 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
         payloadBytes.toString("utf8"),
         options.encryptionKeyId,
         options.signatureKeyId,
-        testKeys ? 1 : 0,
+        0,
         nowIso(),
       ],
     );
@@ -275,7 +288,7 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
       sizeBytes: pack.length,
       encryptionKeyId: options.encryptionKeyId,
       signatureKeyId: options.signatureKeyId,
-      testKeys,
+      usedTestKeys: false,
     });
     void row;
   });
@@ -293,7 +306,7 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
     manifestUrlHint: options.manifestBaseUrl
       ? `${options.manifestBaseUrl.replace(/\/+$/, "")}/${lesson.targetLanguage}/${lesson.songId}/latest.json`
       : "",
-    usedTestKeys: testKeys,
+    usedTestKeys: false,
     verification: {
       packLength: verification.packLength,
       packSha256: verification.packSha256,
@@ -351,6 +364,12 @@ export function verifyArtifacts(input: VerifyInput) {
     if (!coverBytes) throw new Error("pack is missing the cover referenced by lesson.json");
     if (sha256Hex(coverBytes) !== lesson.media.cover.sha256) throw new Error("cover hash mismatch inside the pack");
     detail.push("cover sha256 ok");
+  }
+  if (lesson.media.storyAudio) {
+    const storyBytes = zip.files[lesson.media.storyAudio.path];
+    if (!storyBytes) throw new Error("pack is missing the story audio referenced by lesson.json");
+    if (sha256Hex(storyBytes) !== lesson.media.storyAudio.sha256) throw new Error("story audio hash mismatch inside the pack");
+    detail.push("story audio sha256 ok");
   }
 
   const envelope = JSON.parse(fs.readFileSync(input.manifestPath, "utf8")) as ManifestEnvelope;

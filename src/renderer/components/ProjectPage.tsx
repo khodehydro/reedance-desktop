@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useLang } from "../i18n";
 import { OverviewTab } from "./OverviewTab";
 import { LyricsTab } from "./LyricsTab";
+import { StoryTab } from "./StoryTab";
 import { TimelineTab } from "./TimelineTab";
 import { LearningTab } from "./LearningTab";
 import { QuizTab } from "./QuizTab";
@@ -20,7 +21,7 @@ const STATE_LABEL: Record<string, { fa: string; en: string; tone: "muted" | "inf
   approved: { fa: "آمادهٔ خروجی", en: "ready to export", tone: "ok" },
 };
 
-type TabId = "overview" | "timeline" | "lyrics" | "learning" | "quiz" | "review";
+type TabId = "overview" | "timeline" | "lyrics" | "story" | "learning" | "quiz" | "review";
 
 export function ProjectPage({
   projectId,
@@ -177,6 +178,11 @@ export function ProjectPage({
           { id: "overview", label: t("نمای کلی و صوت", "Overview & audio") },
           { id: "timeline", label: t("تایم‌لاین", "Timeline"), badge: `${summary.timedCount}/${summary.lineCount}` },
           { id: "lyrics", label: t("متن و واژه", "Lyrics") },
+          {
+            id: "story",
+            label: t("داستان", "Story"),
+            badge: content.story?.pages.reduce((sum, page) => sum + page.lines.length, 0) ?? 0,
+          },
           { id: "learning", label: t("آموزش", "Learning") },
           { id: "quiz", label: t("آزمون", "Quiz"), badge: content.questions.length },
           { id: "review", label: t("خروجی", "Export") },
@@ -189,6 +195,8 @@ export function ProjectPage({
         <TimelineTab detail={detail} content={content} onChanged={reload} />
       ) : tab === "lyrics" ? (
         <LyricsTab content={content} update={update} />
+      ) : tab === "story" ? (
+        <StoryTab projectId={projectId} content={content} update={update} media={detail.media} onChanged={reload} />
       ) : tab === "learning" ? (
         <LearningTab content={content} update={update} />
       ) : tab === "quiz" ? (

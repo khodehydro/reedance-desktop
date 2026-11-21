@@ -21,9 +21,21 @@
 | ۱. ورود پیش‌نویس | «ورود پیش‌نویس» → فایل `*.rddraft.json` | ساختار و قواعد محتوایی بدون خطا؛ هیچ timing/مدیایی در فایل نباشد |
 | ۲. انتخاب صوت | تب «صوت» → انتخاب فایل از سیستم | کپی محلی، هش SHA-256، کدک و مدت اندازه‌گیری شود |
 | ۳. سینک لیریک | تب «تایم‌لاین» → دکمهٔ **توزیع یکنواخت** یا ثبت دستی با `M` | هر سطر زمان شروع دارد، زمان‌ها صعودی و داخل مدت صوت‌اند |
-| ۴. خروجی | تب «خروجی» → دکمهٔ **دریافت فایل خروجی** | ساخت `.rdpack` (کلید `enc-main`) + `latest.json` امضاشده؛ بدون هیچ رمزی |
+| ۴. خروجی | تب «خروجی» → دکمهٔ **دریافت فایل خروجی** | ساخت `.rdpack` (کلید `enc-main`) + `latest.json` امضاشده؛ بدون هیچ رمزی؛ همه‌ی داخلی بسته با حداکثر سطح DEFLATE فشرده می‌شود |
+
+سینک لیریک: محور تایم‌لاین **از چپ به راست** است (همان جهت پخش). روی تایم‌لاین **خط عموی نارنجی (نوک پخش)** و **خط عموی آبی (خط ثبت)** نمایش داده می‌شود: خط آبی را با کشیدن یا کلیک روی waveform جابه‌جا کنید تا زمانش تغییر کند (همزمان صدا هم به همان نقطه می‌رود)، سپس دکمهٔ **⏱ ثبت شروع سطر (M)** زمان شروع سطر انتخابی را روی همان نقطه ثبت می‌کند. هر سطر را هم می‌توانید مستقیماً از **⏱ ثبت شروع** کناری ثبت کنید. بزرگ‌نمایی با اسلایدر «بزرگ‌نمایی»، چرخ‌ماوس روی تایم‌لاین یا دکمهٔ **هم‌راست‌سازی** انجام می‌شود؛ برای جای‌گذاری دقیق، خط آبی را با کشیدن دقیق جابه‌جا کنید.
 
 اگر ۴۰ سطر یا بیشتر دارید، از دکمهٔ «توزیع یکنواخت N سطر» (در تایم‌لاین یا در تب خروجی) استفاده کنید: زمان شروع همهٔ سطرها به‌طور یکنواخت روی مدت صوت پخش می‌شود و بعد فقط سطرهایی که دقیق نیستند را اصلاح می‌کنید.
+
+## بخش داستان
+
+هر آهنگ می‌تواند بخش داستان هم داشته باشد. در تب **«داستان»**:
+
+- **نام داستان** و **صفحات** داستان را می‌نویسید؛ صفحات را ↑/↓ جابه‌جا و حذف می‌کنید.
+- هر سطر داستان همان چهار بخش لیریک دارد: **متن**، **ترجمهٔ فارسی**، **ترجمهٔ انگلیسی** و **توکن‌های کلمه‌به‌کلمه** (با دکمهٔ «ساخت خودکار از متن»).
+- **صدای متن داستان**: یک فایل صوتی از روی کامپیوتر خودتان (**mp3، m4a یا wav**) را هم مثل صوت آهنگ به پروژه اضافه می‌کنید؛ می‌توانید آن را پخش کنید، حذف کنید یا با دکمهٔ «انتخاب صوت دیگر» عوض کنید. این صدا در خروجی به صورت `story.<نوع>` و در `lesson.json` با شناسه و مدت آن ثبت می‌شود.
+- دکمهٔ **صدای صفحه / صدایی این سطر** متن را با صدای سیستم می‌خواند، تا روایت را أثناء نویسه‌کشی بررسی کنید (این فقط پیش‌نمایش است؛ صدایی که در بسته می‌رود، همان فایل انتخابی شماست).
+- داستان زمان‌بندی ندارد: با آهنگ سینک نمی‌شود و در خروجی به شکلی که اپ اندروید می‌خواند (`story.title` + `story.pages` با ترجمه هر سطر و کلمه‌به‌کلمه) وارد `lesson.json` می‌شود. داستانی که هیچ سطری ندارد خارج می‌شود.
 
 کلید رمزنگاری بسته‌ها یک کلید توزیع ثابت (`enc-main`) است که اپ اندروید هم دارد؛ کلید امضا خودکار ساخته می‌شود. بازبینی/تأیید انسانی و چک‌لیست حقوق از جریان کار حذف شده است. فقط سه چیز خروجی را قفل می‌کند: نبودِ صوت، مدت نامشخص، و سطرهای بدون زمان یا زمان‌های نامرتب.
 
@@ -60,7 +72,7 @@
 
 Install `Reedance-Studio-Setup-1.0.6-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
 
-The pipeline is deliberately linear: import a content-only `.rddraft.json`, pick the audio from your machine, mark every lyric line on the waveform, then press **Get the output file**. Keys are generated and protected by the app; there is no key picker and no approval ceremony. Export is only blocked by a missing audio file, an unmeasured duration or untimed lines. Replacing the audio clears the marks so stale timings can never be exported. Theme: ☾/☀ in the top bar (dark, light, system).
+The pipeline is deliberately linear: import a content-only `.rddraft.json`, pick the audio from your machine, mark every lyric line on the waveform, then press **Get the output file**. Keys are generated and protected by the app; there is no key picker and no approval ceremony. Export is only blocked by a missing audio file, an unmeasured duration or untimed lines. Replacing the audio clears the marks so stale timings can never be exported. Every byte inside the pack (lesson.json, song audio, cover, story audio) is written with maximum-level DEFLATE, so the `.rdpack` is tighter than a standard ZIP of the same content. Theme: ☾/☀ in the top bar (dark, light, system).
 
 There is no password to create or copy: the studio seals packs with the fixed `enc-main` distribution key that the Android app also carries. Until a real key is provisioned the studio uses the published test key, and those exports are permanently marked as test and must not be published.
 
@@ -75,3 +87,7 @@ Long songs: use **Distribute N lines** (timeline or export tab) to lay a startin
 No password at all: packs are sealed with the fixed `enc-main` key and the Android app already holds it, so the file opens itself on the phone. `Settings → File encryption key` only shows the key id, its source and a short fingerprint. If the badge says **test key**, load the real key file once with the import button; from then on every export uses the publishing key. See `docs/CRYPTO.md`.
 
 Keyboard: `Space` play/pause, `M` capture a mark and advance, `←/→` ±100 ms (`Shift` ±1 s), `J/K` previous/next line, `A/B` loop points.
+
+**Lyric sync.** The timeline axis runs **left to right**, the same direction as playback. The waveform shows an orange **playhead** and a blue **capture line**: drag the capture line (or click the waveform) to move it — the audio follows — then press **⏱ Capture line start (M)** to stamp the selected line's start at that point. You can also press **⏱ Capture start** next to any line directly. Zoom with the zoom slider, the mouse wheel over the timeline, or the **Fit** button; drag the capture line for precise placement.
+
+**Story section.** Every song can also carry a story. In the **Story** tab you write the story title and pages; each page holds lines with the same four fields a lyric line has — text, FA translation, EN translation and word-by-word tokens (use *Rebuild from text*). **Story narration audio**: add an audio file from your own computer (**mp3, m4a or wav**) exactly like the song audio — play, remove or replace it with *Choose another audio*. At export it ships in the pack as `story.<ext>` and is referenced from `lesson.json` with its hash and duration. The **Speak page / Speak line** buttons read the text with the system voice so you can check the narration while authoring (that is only a preview — the audio that ships is the file you selected). Story lines are never timed or synced; at export they enter `lesson.json` in the shape the Android app reads (`story.title` + `story.pages` with per-line and per-word translations). A story with no lines is left out of the pack.

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import type {
   AppInfo,
   DraftContent,
@@ -16,16 +16,8 @@ import { all, audit, flushNow } from "./db";
 import { rescanArchive, stageExport } from "./archive";
 import { runExport, runQuickExport, verifyExportReport } from "./exporter";
 import { createEmptyDraft, importDraftFile } from "./import";
-import {
-  backupKeys,
-  encryptionProtectionSummary,
-  generateTestKeys,
-  importKeys,
-  keyCount,
-  listKeys,
-  packKeyInfo,
-} from "./keys";
-import { importAudio, importCover, withMeasuredDuration } from "./media";
+import { ensureStudioKeys } from "./keys";
+import { importAudio, importCover, importStoryAudio, withMeasuredDuration } from "./media";
 import { publishExport } from "./publication";
 import {
   approveProject,
@@ -46,7 +38,6 @@ import {
 } from "./projects";
 import { getSettings, updateSettings } from "./settings";
 import { computeStats, statsJson, statsToCsv } from "./stats";
-import { app } from "electron";
 import { ensureDirs } from "./paths";
 
 const DRAFT_MAX = 4 * 1024 * 1024;
@@ -90,6 +81,31 @@ function mainWindow(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null;
 }
 
+/**
+ * Speak `text` with the OS voice through Chromium's speech synthesis, which
+ * is available as a global in the Electron main process. The voice list is
+ * loaded asynchronously, so an exact language match is tried first and the
+ * default voice is used as a fallback.
+ */
+function speak(text: string, lang: string): boolean {
+  try {
+    speechSynthesis.cancel();
+    const wanted = lang.toLowerCase();
+    const voices = speechSynthesis.getVoices();
+    const match =
+      voices.find((voice) => voice.lang.toLowerCase().startsWith(wanted)) ??
+      voices.find((voice) => wanted.startsWith(voice.lang.toLowerCase())) ??
+      null;
+    const utterance = new SpeechSynthesisUtterance(text);
+    if (match) utterance.voice = match;
+    utterance.lang = lang;
+    speechSynthesis.speak(utterance);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function pickFile(filters: Electron.FileFilter[], title: string): Promise<string | null> {
   const parent = mainWindow();
   const result = parent
@@ -121,7 +137,6 @@ export function registerIpc(): void {
 
   ipcMain.handle(CH.appInfo, (): AppInfo => {
     const settings = getSettings();
-    const keys = keyCount();
     return {
       version: app.getVersion(),
       electron: process.versions.electron,
@@ -130,9 +145,7 @@ export function registerIpc(): void {
       platform: `${process.platform} ${os.release()}`,
       dataDir: app.getPath("userData"),
       archiveDir: settings.archiveDir,
-      safeStorage: encryptionProtectionSummary() === "safeStorage",
-      keyCount: keys.total,
-      testKeysOnly: keys.testOnly,
+      safeStorage: safeStorage.isEncryptionAvailable(),
     };
   });
 
@@ -259,6 +272,24 @@ export function registerIpc(): void {
     return { media: updated, warnings: [], durationSource: "container" as const };
   });
 
+  ipcMain.handle(CH.mediaSelectStoryAudio, async (_event, projectId: unknown) => {
+    const project = id(projectId, "projectId");
+    const media = readMedia(project)?.media;
+    if (!media) throw new Error("select the song audio before the story audio");
+    const file = await pickFile(
+      [{ name: "Story audio", extensions: ["mp3", "m4a", "wav"] }],
+      "Select the story narration audio from this computer",
+    );
+    if (!file) return null;
+    loadProject(project);
+    const updated = importStoryAudio(project, file, media);
+    saveMedia(project, updated, false);
+    audit(project, "story-audio-import", "operator", { file: path.basename(file) });
+    flushNow();
+    notifyChanged();
+    return { media: updated, warnings: [], durationSource: "container" as const };
+  });
+
   ipcMain.handle(CH.mediaRemoveCover, (_event, projectId: unknown) => {
     const project = id(projectId, "projectId");
     const media = readMedia(project)?.media;
@@ -270,10 +301,41 @@ export function registerIpc(): void {
     return { media: updated, warnings: [], durationSource: "container" as const };
   });
 
-  ipcMain.handle(CH.mediaReportDuration, (_event, projectId: unknown, durationMs: unknown) => {
+  ipcMain.handle(CH.mediaRemoveStoryAudio, (_event, projectId: unknown) => {
+    const project = id(projectId, "projectId");
+    const media = readMedia(project)?.media;
+    if (!media) throw new Error("this project has no media yet");
+    if (media.storyAudioPath && fs.existsSync(media.storyAudioPath)) fs.rmSync(media.storyAudioPath, { force: true });
+    const updated = {
+      ...media,
+      storyAudioPath: undefined,
+      storyAudioFileName: undefined,
+      storyAudioSha256: undefined,
+      storyAudioMimeType: undefined,
+      storyAudioExtension: undefined,
+      storyAudioDurationMs: undefined,
+      storyAudioBytes: undefined,
+    };
+    saveMedia(project, updated, false);
+    notifyChanged();
+    return { media: updated, warnings: [], durationSource: "container" as const };
+  });
+
+  ipcMain.handle(CH.mediaReportDuration, (_event, projectId: unknown, durationMs: unknown, kind: unknown) => {
     const project = id(projectId, "projectId");
     const media = readMedia(project)?.media;
     if (!media) throw new Error("no audio selected");
+    const isStory = kind === "story-audio";
+    if (isStory) {
+      if (media.storyAudioDurationMs && media.storyAudioDurationMs > 0) {
+        return { media, warnings: [], durationSource: "container" as const };
+      }
+      if (!media.storyAudioPath) throw new Error("no story audio selected");
+      const updated = { ...media, storyAudioDurationMs: Math.round(num(durationMs, "durationMs", 1)) };
+      saveMedia(project, updated, false);
+      notifyChanged();
+      return { media: updated, warnings: [], durationSource: "decoder" as const };
+    }
     if (media.durationMs > 0) {
       return { media, warnings: [], durationSource: "container" as const };
     }
@@ -288,6 +350,7 @@ export function registerIpc(): void {
     const media = readMedia(project)?.media;
     if (!media) return null;
     if (kind === "cover") return media.coverPath ? `rdmedia://media/cover/${project}` : null;
+    if (kind === "story-audio") return media.storyAudioPath ? `rdmedia://media/story-audio/${project}` : null;
     return `rdmedia://media/audio/${project}`;
   });
 
@@ -295,12 +358,30 @@ export function registerIpc(): void {
     const project = id(projectId, "projectId");
     const media = readMedia(project)?.media;
     if (!media) return null;
-    const file = kind === "cover" ? media.coverPath : media.audioPath;
+    if (kind === "cover") {
+      if (!media.coverPath || !fs.existsSync(media.coverPath)) return null;
+      const cover = fs.readFileSync(media.coverPath);
+      return cover.buffer.slice(cover.byteOffset, cover.byteOffset + cover.byteLength);
+    }
+    if (kind === "story-audio") {
+      if (!media.storyAudioPath || !fs.existsSync(media.storyAudioPath)) return null;
+      const story = fs.readFileSync(media.storyAudioPath);
+      return story.buffer.slice(story.byteOffset, story.byteOffset + story.byteLength);
+    }
+    const file = media.audioPath;
     if (!file || !fs.existsSync(file)) return null;
     const stat = fs.statSync(file);
     if (stat.size > 256 * 1024 * 1024) throw new Error("media file is too large for waveform analysis");
     const bytes = fs.readFileSync(file);
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  });
+
+  ipcMain.handle(CH.mediaSpeak, (_event, input: unknown): boolean => {
+    const value = obj(input, "input");
+    const text = str(value.text, "text", 20_000);
+    const lang = str(value.lang, "lang", 32);
+    if (!text.trim()) return false;
+    return speak(text, lang);
   });
 
   ipcMain.handle(CH.marksSave, (_event, projectId: unknown, marks: unknown) => {
@@ -376,7 +457,6 @@ export function registerIpc(): void {
         signatureKeyId: str(value.signatureKeyId, "signatureKeyId", 32),
         displayVersion: str(value.displayVersion, "displayVersion", 32),
         manifestBaseUrl: str(value.manifestBaseUrl, "manifestBaseUrl", 300),
-        useTestKeys: bool(value.useTestKeys, "useTestKeys"),
       },
       { archiveRoot: getSettings().archiveDir },
     );
@@ -410,33 +490,6 @@ export function registerIpc(): void {
     else shell.openPath(path.dirname(packPath));
   });
 
-  ipcMain.handle(CH.keysList, () => listKeys());
-  ipcMain.handle(CH.keysGenerateTest, () => {
-    const keys = generateTestKeys();
-    notifyChanged();
-    return keys;
-  });
-  ipcMain.handle(CH.keysImport, async () => {
-    const file = await pickFile([{ name: "Key material", extensions: ["json"] }], "Import operator key material");
-    if (!file) return listKeys();
-    const stat = fs.statSync(file);
-    if (stat.size > 64 * 1024) throw new Error("key file is unexpectedly large");
-    const keys = importKeys(fs.readFileSync(file, "utf8"));
-    notifyChanged();
-    return keys;
-  });
-  ipcMain.handle(CH.keysInfo, () => packKeyInfo());
-
-  ipcMain.handle(CH.keysBackup, async (_event, passphrase: unknown) => {
-    const secret = str(passphrase, "passphrase", 200);
-    const result = await dialog.showSaveDialog({
-      title: "Save an encrypted key backup",
-      defaultPath: `reedance-keys-${new Date().toISOString().slice(0, 10)}.json`,
-      filters: [{ name: "Key backup", extensions: ["json"] }],
-    });
-    if (result.canceled || !result.filePath) return null;
-    return backupKeys(secret, result.filePath);
-  });
 
   ipcMain.handle(CH.statsGet, (_event, scope: unknown) => {
     const value = obj(scope, "scope");

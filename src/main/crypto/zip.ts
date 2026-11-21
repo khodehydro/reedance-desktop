@@ -5,17 +5,29 @@ import { unzipSync, zipSync, type Zippable } from "fflate";
  *
  * Contract v1 restricts the archive to flat ASCII entry names at the root,
  * STORE or DEFLATE only, no extra fields, no data descriptors, no encryption,
- * no ZIP64, no duplicate entries and at most three entries
- * (lesson.json + one audio + optional cover).
+ * no ZIP64, no duplicate entries and at most four entries
+ * (lesson.json + one audio + optional cover + optional story audio).
+ *
+ * Every entry is packed at the maximum DEFLATE level so the pack is tighter
+ * than a standard ZIP: lesson.json and uncompressed sources (WAV PCM) shrink
+ * dramatically, and already-compressed containers (MP3/M4A/JPEG) still go
+ * through the strongest deflate available.
  */
-export const ZIP_MAX_ENTRIES = 3;
+export const ZIP_MAX_ENTRIES = 4;
 export const ZIP_MAX_TOTAL = 252 * 1024 * 1024;
 export const ZIP_MAX_PLAINTEXT = 256 * 1024 * 1024;
 
+/** Maximum DEFLATE level — the pack must beat a standard ZIP, not match it. */
+export const MAX_DEFLATE_LEVEL = 9;
+
 export interface ZipEntryInput {
-  name: "lesson.json" | "audio.mp3" | "audio.m4a" | "audio.wav" | "cover.jpg" | "cover.png" | "cover.webp";
+  name:
+    | "lesson.json"
+    | "audio.mp3" | "audio.m4a" | "audio.wav"
+    | "cover.jpg" | "cover.png" | "cover.webp"
+    | "story.mp3" | "story.m4a" | "story.wav";
   data: Buffer;
-  /** Compress JSON with DEFLATE, keep already-compressed media STORE. */
+  /** Pack the entry with maximum DEFLATE; STORE (false) is only used by tests. */
   compress: boolean;
 }
 
@@ -23,7 +35,7 @@ const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/;
 
 export function buildZip(entries: ZipEntryInput[]): Buffer {
   if (entries.length < 2 || entries.length > ZIP_MAX_ENTRIES) {
-    throw new Error(`ZIP must contain 2..${ZIP_MAX_ENTRIES} entries (lesson + audio + optional cover)`);
+    throw new Error(`ZIP must contain 2..${ZIP_MAX_ENTRIES} entries (lesson + audio + optional cover + optional story audio)`);
   }
   const seen = new Set<string>();
   const zippable: Zippable = {};
@@ -35,7 +47,7 @@ export function buildZip(entries: ZipEntryInput[]): Buffer {
     seen.add(lowered);
     if (entry.data.length === 0) throw new Error(`ZIP entry ${entry.name} is empty`);
     total += entry.data.length;
-    zippable[entry.name] = [new Uint8Array(entry.data), { level: entry.compress ? 6 : 0 }];
+    zippable[entry.name] = [new Uint8Array(entry.data), { level: entry.compress ? MAX_DEFLATE_LEVEL : 0 }];
   }
   if (total > ZIP_MAX_PLAINTEXT) throw new Error("ZIP plaintext exceeds the 256 MiB contract limit");
   // A fixed in-range timestamp keeps our packs byte-reproducible apart from the
@@ -72,7 +84,10 @@ export function readZipStrict(data: Buffer, maxTotal = ZIP_MAX_TOTAL): ReadZipRe
       const compressed = Math.max(file.size, 1);
       const ratio = file.originalSize / compressed;
       const isJson = name.endsWith(".json");
-      if (!isJson && ratio > 100) throw new Error(`suspicious compression ratio for ${name}`);
+      // Uncompressed WAV PCM legitimately deflates far below its original size;
+      // the bound stays far below zip-bomb territory while accepting any real
+      // container produced by maximum DEFLATE.
+      if (!isJson && ratio > 1000) throw new Error(`suspicious compression ratio for ${name}`);
       return true;
     },
   });

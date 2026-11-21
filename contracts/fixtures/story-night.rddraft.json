@@ -1,0 +1,193 @@
+{
+  "draftSchemaVersion": 1,
+  "songId": "story-night",
+  "targetLanguage": "en",
+  "locale": "en-GB",
+  "title": "Night on the avenue (test only)",
+  "artist": "Reedance Contract Tests",
+  "level": "A1",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "generator": "Reedance contract test generator",
+  "notes": "Story-reader scenario; no audio or timeline markers are in this draft.",
+  "sources": {
+    "lyrics": {
+      "description": "Original invented story text; not sung",
+      "rightsStatus": "documented",
+      "sourceReference": "scripts/make-test-fixture.mjs",
+      "permissionRef": "fixture-only"
+    },
+    "lesson": {
+      "description": "Original test translations and glosses",
+      "rightsStatus": "documented",
+      "sourceReference": "scripts/make-test-fixture.mjs",
+      "permissionRef": "fixture-only"
+    }
+  },
+  "credits": {
+    "lyrics": "Original test text for this repository",
+    "noticeFa": "فقط نمونهٔ آزمایشی؛ آهنگ واقعی یا خروجی انتشار نیست.",
+    "noticeEn": "Test fixture only; not a real song or production release."
+  },
+  "lyrics": [
+    {
+      "id": "line-1",
+      "text": "Night falls on the avenue.",
+      "translationFa": "شب بر خیابان می‌پیچد.",
+      "translationEn": "Night falls on the avenue.",
+      "tokens": [
+        {
+          "surface": "Night",
+          "translationFa": "شب",
+          "translationEn": "night"
+        },
+        {
+          "surface": "falls",
+          "translationFa": "می‌افتد",
+          "translationEn": "falls"
+        },
+        {
+          "surface": "on",
+          "translationFa": "روی",
+          "translationEn": "on"
+        },
+        {
+          "surface": "the",
+          "translationFa": "—",
+          "translationEn": "the"
+        },
+        {
+          "surface": "avenue.",
+          "translationFa": "خیابان.",
+          "translationEn": "avenue"
+        }
+      ]
+    }
+  ],
+  "story": {
+    "title": "Night on the avenue",
+    "pages": [
+      {
+        "id": "night-page-1",
+        "lines": [
+          {
+            "id": "night-line-1",
+            "text": "The street is empty after midnight.",
+            "translationFa": "بعد از نیمه‌شب خیابان خالی است.",
+            "translationEn": "The street is empty after midnight.",
+            "tokens": [
+              {
+                "surface": "The",
+                "translationFa": "—",
+                "translationEn": "the"
+              },
+              {
+                "surface": "street",
+                "translationFa": "خیابان",
+                "translationEn": "street"
+              },
+              {
+                "surface": "is",
+                "translationFa": "است",
+                "translationEn": "is"
+              },
+              {
+                "surface": "empty",
+                "translationFa": "خالی",
+                "translationEn": "empty",
+                "lexemeId": "en:quiet"
+              },
+              {
+                "surface": "after",
+                "translationFa": "بعد از",
+                "translationEn": "after"
+              },
+              {
+                "surface": "midnight.",
+                "translationFa": "نیمه‌شب.",
+                "translationEn": "midnight"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "vocabulary": [
+    {
+      "lexemeId": "en:quiet",
+      "lemma": "quiet",
+      "normalizedKey": "quiet",
+      "translationFa": "آرام",
+      "translationEn": "calm",
+      "ipa": "/ˈkwaɪət/",
+      "faReading": "کوایِت",
+      "partFa": "صفت",
+      "partEn": "adjective",
+      "tone": "mint",
+      "example": {
+        "text": "A quiet room.",
+        "translationFa": "اتاقی آرام.",
+        "translationEn": "A calm room."
+      }
+    }
+  ],
+  "grammar": [
+    {
+      "id": "night-grammar",
+      "tagFa": "واژگان",
+      "tagEn": "Vocabulary",
+      "titleFa": "صفت آرام",
+      "titleEn": "The adjective quiet",
+      "bodyFa": "صفت quiet حالت آرامی را توصیف می‌کند.",
+      "bodyEn": "The adjective quiet describes a calm state.",
+      "example": {
+        "text": "The night is quiet.",
+        "translationFa": "شب آرام است.",
+        "translationEn": "The night is calm."
+      },
+      "tone": "mint"
+    }
+  ],
+  "idioms": [],
+  "sentences": [
+    {
+      "id": "night-sentence",
+      "text": "The night is quiet.",
+      "translationFa": "شب آرام است.",
+      "translationEn": "The night is calm.",
+      "contextFa": "برای توصیف شب.",
+      "contextEn": "For describing the night.",
+      "lineId": "line-1"
+    }
+  ],
+  "vocabularyTables": [],
+  "questions": [
+    {
+      "id": "night-choice",
+      "type": "choice",
+      "skillFa": "درک واژه",
+      "skillEn": "Meaning",
+      "promptFa": "quiet یعنی چه؟",
+      "promptEn": "What does quiet mean?",
+      "explanationFa": "quiet یعنی آرام.",
+      "explanationEn": "Quiet means calm.",
+      "lineId": "line-1",
+      "relatedLexemeIds": [
+        "en:quiet"
+      ],
+      "options": [
+        {
+          "id": "calm",
+          "fa": "آرام",
+          "en": "calm"
+        },
+        {
+          "id": "loud",
+          "fa": "بلند",
+          "en": "loud"
+        }
+      ],
+      "correctId": "calm"
+    }
+  ]
+}

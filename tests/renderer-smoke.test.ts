@@ -146,9 +146,9 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
   assert.ok(settings.includes("ظاهر"), "the settings page mounts");
   assert.ok(settings.includes("پوشهٔ خروجی‌ها"), "the output folder setting is offered");
   assert.ok(settings.includes("HYDRO team"), "the about section keeps the HYDRO team credit");
-  assert.ok(settings.includes("کلید رمزنگاری فایل‌ها"), "the key section replaces the password UI");
+  assert.ok(!settings.includes("کلید رمزنگاری فایل‌ها"), "no key section is shown: keys are embedded, not operator-managed");
   assert.ok(!settings.includes("رمز فایل‌ها"), "no file-password field is left in Settings");
-  assert.ok(settings.includes("enc-main"), "the fixed pack key id is shown");
+  assert.ok(!settings.includes("اثر انگشت"), "no key fingerprint is exposed");
 
   const library = await clickNav("کتابخانه");
   assert.ok(library.includes("کتابخانه"), "navigation returns to the library");
@@ -176,6 +176,25 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
   assert.ok(/ثبت زمان سطر|Capture line time/.test(timelineText), "the waveform editor mounts");
   assert.ok(window.document.querySelector(".wave-canvas"), "the waveform canvas is rendered");
   assert.ok(window.document.querySelectorAll(".line-row").length > 0, "lyric lines are listed under the waveform");
+
+  // The story tab must mount its story-audio timeline once a story audio is
+  // added: same waveform/transport/capture-line toolkit as the lyric timeline.
+  const storyTab = Array.from(window.document.querySelectorAll(".tab")).find((element) =>
+    (element.textContent ?? "").includes("داستان"),
+  );
+  assert.ok(storyTab, "the story tab button exists");
+  (storyTab as unknown as HTMLElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 160));
+  const addStoryAudio = Array.from(window.document.querySelectorAll("button")).find((button) =>
+    /افزودن صوت داستان|Add story audio/.test(button.textContent ?? ""),
+  );
+  assert.ok(addStoryAudio, "the story audio add button renders");
+  (addStoryAudio as unknown as HTMLElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const storyText = window.document.body.textContent ?? "";
+  assert.ok(/story\.mp3/.test(storyText), "the added story audio is shown");
+  assert.ok(window.document.querySelector(".timeline-ltr .drag-line"), "the story audio timeline mounts the capture line");
+  assert.ok(window.document.querySelector(".timeline-ltr .wave-canvas"), "the story audio timeline mounts the waveform");
 
   // Every remaining project tab must mount too: the content editors, the quiz
   // editor and the review/export panel all read from the same bridge.

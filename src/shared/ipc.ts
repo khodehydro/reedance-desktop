@@ -24,9 +24,12 @@ export const CH = {
   mediaSelectAudio: "media:select-audio",
   mediaSelectCover: "media:select-cover",
   mediaRemoveCover: "media:remove-cover",
+  mediaSelectStoryAudio: "media:select-story-audio",
+  mediaRemoveStoryAudio: "media:remove-story-audio",
   mediaReportDuration: "media:report-duration",
   mediaPlayUrl: "media:play-url",
   mediaBytes: "media:bytes",
+  mediaSpeak: "media:speak",
 
   marksSave: "marks:save",
   marksSetReviewed: "marks:set-reviewed",
@@ -43,11 +46,6 @@ export const CH = {
   exportPublish: "export:publish",
   exportOpenFolder: "export:open-folder",
 
-  keysList: "keys:list",
-  keysGenerateTest: "keys:generate-test",
-  keysImport: "keys:import",
-  keysBackup: "keys:backup",
-  keysInfo: "keys:info",
 
   statsGet: "stats:get",
   statsSave: "stats:save",

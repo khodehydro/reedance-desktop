@@ -52,6 +52,12 @@ export interface MediaRow {
   cover_mime_type: string | null;
   cover_extension: string | null;
   cover_bytes: number | null;
+  story_audio_copy_path: string | null;
+  story_audio_sha256: string | null;
+  story_audio_mime_type: string | null;
+  story_audio_extension: string | null;
+  story_audio_duration_ms: number | null;
+  story_audio_bytes: number | null;
   imported_at: string;
 }
 
@@ -146,6 +152,13 @@ export function readMedia(projectId: string): { media: MediaInfo; row: MediaRow 
       coverMimeType: row.cover_mime_type ?? undefined,
       coverExtension: (row.cover_extension as MediaInfo["coverExtension"]) ?? undefined,
       coverBytes: row.cover_bytes ?? undefined,
+      storyAudioPath: row.story_audio_copy_path ?? undefined,
+      storyAudioFileName: row.story_audio_copy_path ? path.basename(row.story_audio_copy_path) : undefined,
+      storyAudioSha256: row.story_audio_sha256 ?? undefined,
+      storyAudioMimeType: row.story_audio_mime_type ?? undefined,
+      storyAudioExtension: (row.story_audio_extension as MediaInfo["storyAudioExtension"]) ?? undefined,
+      storyAudioDurationMs: row.story_audio_duration_ms ?? undefined,
+      storyAudioBytes: row.story_audio_bytes ?? undefined,
     },
   };
 }
@@ -678,8 +691,10 @@ export function saveMedia(projectId: string, media: MediaInfo, resetReview: bool
     const audioChanged = !!previousAudio && previousAudio.audio_sha256 !== media.audioSha256;
     run(
       `INSERT INTO project_media(project_id, audio_copy_path, audio_source_name, audio_sha256, mime_type, extension, duration_ms, bytes,
-        cover_copy_path, cover_sha256, cover_mime_type, cover_extension, cover_bytes, imported_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        cover_copy_path, cover_sha256, cover_mime_type, cover_extension, cover_bytes,
+        story_audio_copy_path, story_audio_sha256, story_audio_mime_type, story_audio_extension, story_audio_duration_ms, story_audio_bytes,
+        imported_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(project_id) DO UPDATE SET
          audio_copy_path = excluded.audio_copy_path,
          audio_source_name = excluded.audio_source_name,
@@ -693,6 +708,12 @@ export function saveMedia(projectId: string, media: MediaInfo, resetReview: bool
          cover_mime_type = excluded.cover_mime_type,
          cover_extension = excluded.cover_extension,
          cover_bytes = excluded.cover_bytes,
+         story_audio_copy_path = excluded.story_audio_copy_path,
+         story_audio_sha256 = excluded.story_audio_sha256,
+         story_audio_mime_type = excluded.story_audio_mime_type,
+         story_audio_extension = excluded.story_audio_extension,
+         story_audio_duration_ms = excluded.story_audio_duration_ms,
+         story_audio_bytes = excluded.story_audio_bytes,
          imported_at = excluded.imported_at`,
       [
         projectId,
@@ -708,6 +729,12 @@ export function saveMedia(projectId: string, media: MediaInfo, resetReview: bool
         media.coverMimeType ?? null,
         media.coverExtension ?? null,
         media.coverBytes ?? null,
+        media.storyAudioPath ?? null,
+        media.storyAudioSha256 ?? null,
+        media.storyAudioMimeType ?? null,
+        media.storyAudioExtension ?? null,
+        media.storyAudioDurationMs === undefined ? null : Math.round(media.storyAudioDurationMs),
+        media.storyAudioBytes ?? null,
         media.importedAt,
       ],
     );

@@ -177,6 +177,16 @@ const MIGRATIONS: string[] = [
   DROP TABLE songs;
   ALTER TABLE songs_next RENAME TO songs;
   `,
+
+  /* v3 — story narration audio on databases created before v3. */
+  `
+  ALTER TABLE project_media ADD COLUMN story_audio_copy_path TEXT;
+  ALTER TABLE project_media ADD COLUMN story_audio_sha256 TEXT;
+  ALTER TABLE project_media ADD COLUMN story_audio_mime_type TEXT;
+  ALTER TABLE project_media ADD COLUMN story_audio_extension TEXT;
+  ALTER TABLE project_media ADD COLUMN story_audio_duration_ms INTEGER;
+  ALTER TABLE project_media ADD COLUMN story_audio_bytes INTEGER;
+  `,
 ];
 
 export async function openDatabase(): Promise<void> {

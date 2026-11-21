@@ -144,3 +144,31 @@ test("end-to-end: pack, manifest and independent re-open like the Android client
   tampered[Math.floor(tampered.length / 2)] = tampered[Math.floor(tampered.length / 2)] ^ 0x01;
   assert.throws(() => decryptPack(tampered, aesKey));
 });
+
+test("a story section is mapped to the Android story shape and validates", () => {
+  const lesson = assembleLesson({ content: draft, marks, media, rights });
+  assert.ok(lesson.story, "the draft story must reach the published lesson");
+  const story = draft.story!;
+  assert.equal(lesson.story.title, story.title);
+  assert.equal(lesson.story.pages.length, story.pages.length);
+  const firstLine = lesson.story.pages[0].lines[0];
+  assert.equal(firstLine.text, story.pages[0].lines[0].text);
+  assert.equal(firstLine.meaningFa, story.pages[0].lines[0].translationFa);
+  assert.equal(firstLine.meaningEn, story.pages[0].lines[0].translationEn);
+  assert.deepEqual(
+    firstLine.words.map((word) => word.text),
+    story.pages[0].lines[0].tokens.map((token) => token.surface),
+  );
+  assert.deepEqual(validateLessonStructure(lesson), []);
+  assert.deepEqual(
+    validateLessonSemantics(lesson, media.durationMs, media.audioSha256).filter((issue) => issue.severity === "error"),
+    [],
+  );
+});
+
+test("a draft without a story still exports a valid lesson", () => {
+  const withoutStory = { ...draft, story: undefined };
+  const lesson = assembleLesson({ content: withoutStory, marks, media, rights });
+  assert.equal(lesson.story, undefined);
+  assert.deepEqual(validateLessonStructure(lesson), []);
+});
