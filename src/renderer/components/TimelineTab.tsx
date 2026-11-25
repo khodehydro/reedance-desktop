@@ -12,24 +12,40 @@ interface MarkDraft {
 }
 
 /**
+ * One timingable row. Song projects pass the lesson's lyric lines; ReeTalk
+ * projects pass their dialogue turns (badge = speaker id) — the timeline does
+ * not care where the lines came from.
+ */
+export interface TimelineLine {
+  id: string;
+  text: string;
+  translationEn: string;
+  badge?: string;
+}
+
+/**
  * Dedicated lyric timeline.
  *
- * The operator marks the start of every line against the audio they selected.
- * The waveform, seek bar and transport live in the shared `AudioTimeline`
- * (left-to-right, zoomable, with a draggable capture line); this tab owns the
- * marks: click the waveform or drag the capture line to place the time, press
- * Capture (or `M`) while playing, drag a marker, or type a millisecond
- * timecode. Every change clears the review flag of that line, because a
- * reviewed mark must be bound to the current audio hash and the current line
- * text.
+ * The operator marks the start — and optionally the end — of every line
+ * against the audio they selected. The waveform, seek bar and transport live
+ * in the shared `AudioTimeline` (left-to-right, zoomable, with a draggable
+ * capture line); this tab owns the marks: click the waveform or drag the
+ * capture line to place the time, press Capture Start (`M`) or Capture End
+ * (`E`) while playing, drag a marker, or type a millisecond timecode. Missing
+ * end times are filled at export (next line's start, else audio duration), so
+ * recording only starts is enough. Every change clears the review flag of
+ * that line, because a reviewed mark must be bound to the current audio hash
+ * and the current line text.
  */
 export function TimelineTab({
   detail,
   content,
+  lines,
   onChanged,
 }: {
   detail: ProjectDetail;
-  content: DraftContent;
+  content: DraftContent | null;
+  lines?: TimelineLine[];
   onChanged: () => Promise<void>;
 }): React.ReactElement {
   const { t } = useLang();
@@ -39,24 +55,26 @@ export function TimelineTab({
   const currentTimeRef = useRef(0);
   const timelineRef = useRef<AudioTimelineHandle>(null);
 
+  const lyricLines: TimelineLine[] = lines ?? content?.lyrics ?? [];
+
   const [marks, setMarks] = useState<Record<string, MarkDraft>>(() => {
     const map: Record<string, MarkDraft> = {};
-    for (const line of content.lyrics) map[line.id] = { startMs: null, endMs: null };
+    for (const line of lyricLines) map[line.id] = { startMs: null, endMs: null };
     for (const mark of detail.marks) map[mark.lineId] = { startMs: mark.startMs, endMs: mark.endMs };
     return map;
   });
   const [dirty, setDirty] = useState(false);
   const [distributing, setDistributing] = useState(false);
-  const [selectedId, setSelectedId] = useState<string>(content.lyrics[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState<string>(lyricLines[0]?.id ?? "");
 
   /* Resync when the project changes underneath us (e.g. after a save). */
   useEffect(() => {
     if (dirty) return;
     const map: Record<string, MarkDraft> = {};
-    for (const line of content.lyrics) map[line.id] = { startMs: null, endMs: null };
+    for (const line of lyricLines) map[line.id] = { startMs: null, endMs: null };
     for (const mark of detail.marks) map[mark.lineId] = { startMs: mark.startMs, endMs: mark.endMs };
     setMarks(map);
-  }, [detail.marks, content.lyrics, dirty]);
+  }, [detail.marks, lyricLines, dirty]);
 
   const setMark = useCallback((lineId: string, startMs: number | null, endMs?: number | null) => {
     setMarks((current) => ({
@@ -71,17 +89,45 @@ export function TimelineTab({
 
   const capture = useCallback(() => {
     if (!selectedId) return;
-    setMark(selectedId, Math.round(currentTimeRef.current));
+    const at = Math.max(0, Math.round(currentTimeRef.current));
+    const recordedEnd = marks[selectedId]?.endMs ?? null;
+    // A start placed at/after the recorded end makes that end stale: clear it
+    // instead of silently producing an inverted interval.
+    const end = recordedEnd !== null && at >= recordedEnd ? null : recordedEnd;
+    setMark(selectedId, at, end);
     toast.push(t("شروع سطر انتخابی ثبت شد.", "Start of the selected line captured."), "ok");
-    const next = content.lyrics.find((line) => line.id === selectedId);
+    const next = lyricLines.find((line) => line.id === selectedId);
     if (next) {
-      const index = content.lyrics.indexOf(next);
-      const follow = content.lyrics[index + 1];
+      const index = lyricLines.indexOf(next);
+      const follow = lyricLines[index + 1];
       if (follow) setSelectedId(follow.id);
     }
-  }, [content.lyrics, selectedId, setMark, toast]);
+  }, [lyricLines, marks, selectedId, setMark, toast]);
 
-  const selectedIndex = content.lyrics.findIndex((line) => line.id === selectedId);
+  const captureEnd = useCallback(
+    (lineId?: string) => {
+      const id = lineId ?? selectedId;
+      if (!id) return;
+      const at = Math.max(0, Math.round(currentTimeRef.current));
+      const start = marks[id]?.startMs ?? null;
+      if (start === null) {
+        toast.push(t("اول زمان شروع این سطر را ثبت کنید.", "Capture this line's start first."), "bad");
+        return;
+      }
+      if (at <= start) {
+        toast.push(
+          t("زمان پایان باید بعد از زمان شروع باشد؛ جلوتر بروید و دوباره ثبت کنید.", "The end must come after the start — scrub forward and capture again."),
+          "bad",
+        );
+        return;
+      }
+      setMark(id, start, at);
+      toast.push(t("پایان سطر ثبت شد.", "Line end captured."), "ok");
+    },
+    [marks, selectedId, setMark, toast],
+  );
+
+  const selectedIndex = lyricLines.findIndex((line) => line.id === selectedId);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -93,6 +139,9 @@ export function TimelineTab({
       } else if (event.key.toLowerCase() === "m") {
         event.preventDefault();
         capture();
+      } else if (event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        captureEnd();
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
         timelineRef.current?.seek(currentTimeRef.current + (event.shiftKey ? 1000 : 100));
@@ -100,14 +149,14 @@ export function TimelineTab({
         event.preventDefault();
         timelineRef.current?.seek(currentTimeRef.current - (event.shiftKey ? 1000 : 100));
       } else if (event.key === "j" && selectedIndex > 0) {
-        setSelectedId(content.lyrics[selectedIndex - 1].id);
-      } else if (event.key === "k" && selectedIndex < content.lyrics.length - 1) {
-        setSelectedId(content.lyrics[selectedIndex + 1].id);
+        setSelectedId(lyricLines[selectedIndex - 1].id);
+      } else if (event.key === "k" && selectedIndex < lyricLines.length - 1) {
+        setSelectedId(lyricLines[selectedIndex + 1].id);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [capture, content.lyrics, durationMs, selectedIndex]);
+  }, [capture, captureEnd, lyricLines, durationMs, selectedIndex]);
 
   /* Debounced save of timing marks. */
   useEffect(() => {
@@ -130,7 +179,7 @@ export function TimelineTab({
   }, [dirty, marks, onChanged, projectId, toast]);
 
   const distribute = async (): Promise<void> => {
-    const timed = content.lyrics.filter((line) => (marks[line.id]?.startMs ?? null) !== null).length;
+    const timed = lyricLines.filter((line) => (marks[line.id]?.startMs ?? null) !== null).length;
     if (timed > 0 && !window.confirm(t(
       `${timed} سطر زمان دارد. همهٔ زمان‌ها با توزیع یکنواخت بازنویسی شوند؟`,
       `${timed} line(s) already have times. Overwrite them with an even spread?`,
@@ -181,6 +230,14 @@ export function TimelineTab({
             ⏱ {t("ثبت شروع سطر (M)", "Capture line start (M)")}
           </Button>
           <Button
+            variant="primary"
+            size="sm"
+            onClick={() => captureEnd()}
+            title={t("زمان پایان سطر انتخابی را روی خط ثبت قرار کن", "Capture the selected line's end at the capture line")}
+          >
+            ⏱ {t("ثبت پایان سطر (E)", "Capture line end (E)")}
+          </Button>
+          <Button
             variant="ghost"
             size="sm"
             onClick={() => void distribute()}
@@ -192,9 +249,9 @@ export function TimelineTab({
           >
             {distributing
               ? t("در حال توزیع…", "Distributing…")
-              : t(`توزیع یکنواخت ${content.lyrics.length} سطر`, `Distribute ${content.lyrics.length} lines`)}
+              : t(`توزیع یکنواخت ${lyricLines.length} سطر`, `Distribute ${lyricLines.length} lines`)}
           </Button>
-          <Badge tone="muted">{t("سطر انتخابی", "selected")}: {selectedIndex + 1}/{content.lyrics.length}</Badge>
+          <Badge tone="muted">{t("سطر انتخابی", "selected")}: {selectedIndex + 1}/{lyricLines.length}</Badge>
           {dirty ? <Badge tone="warn">{t("ذخیره‌نشنده", "unsaved")}</Badge> : <Badge tone="ok">{t("ذخیره شد", "saved")}</Badge>}
         </div>
       </div>
@@ -208,7 +265,7 @@ export function TimelineTab({
           <span>{t("ثبت", "mark")}</span>
         </div>
         <div className="line-rows">
-          {content.lyrics.map((line, index) => {
+          {lyricLines.map((line, index) => {
             const mark = marks[line.id] ?? { startMs: null, endMs: null };
             return (
               <div
@@ -216,8 +273,8 @@ export function TimelineTab({
                 className={`line-row${line.id === selectedId ? " line-selected" : ""}`}
                 onClick={() => setSelectedId(line.id)}
               >
-                <span className="line-number">{index + 1}</span>
-                <span className="line-text" title={line.translationFa}>
+                <span className="line-number">{line.badge ? `${index + 1}·${line.badge}` : index + 1}</span>
+                <span className="line-text" title={line.translationEn}>
                   {line.text || <em className="muted">—</em>}
                 </span>
                 <TimecodeInput
@@ -241,11 +298,24 @@ export function TimelineTab({
                     title={t("زمان شروع این سطر را روی خط ثبت قرار کن", "Capture this line at the capture line")}
                     onClick={() => {
                       setSelectedId(line.id);
-                      setMark(line.id, Math.round(currentTimeRef.current));
+                      const at = Math.max(0, Math.round(currentTimeRef.current));
+                      const recordedEnd = mark.endMs;
+                      setMark(line.id, at, recordedEnd !== null && at >= recordedEnd ? null : recordedEnd);
                       toast.push(t(`شروع سطر ${index + 1} ثبت شد.`, `Line ${index + 1} start captured.`), "ok");
                     }}
                   >
                     ⏱ {t("ثبت شروع", "Start")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title={t("زمان پایان این سطر را روی خط ثبت قرار کن", "Capture this line's end at the capture line")}
+                    onClick={() => {
+                      setSelectedId(line.id);
+                      captureEnd(line.id);
+                    }}
+                  >
+                    ⏱ {t("ثبت پایان", "End")}
                   </Button>
                 </span>
               </div>
@@ -256,14 +326,15 @@ export function TimelineTab({
 
       <Callout tone="info" title={t("میان‌برهای صفحه‌کلید", "Keyboard shortcuts")}>
         <span className="tiny">
-          Space {t("پخش/مکث", "play/pause")} · M {t("ثبت زمان سطر", "capture line")} · ←/→ ±100ms (Shift ±1s) · J/K{" "}
+          Space {t("پخش/مکث", "play/pause")} · M {t("ثبت زمان شروع", "capture start")} · E {t("ثبت زمان پایان", "capture end")} · ←/→ ±100ms (Shift ±1s) · J/K{" "}
           {t("سطر قبلی/بعدی", "previous/next line")} · محور تایم‌لاین از چپ به راست است
         </span>
       </Callout>
 
       <div className="tiny">
         {t("مدت صوت:", "audio duration:")} <Mono>{formatMs(durationMs)}</Mono> ·{" "}
-        {t("هش صوت:", "audio sha256:")} <Mono>{detail.media.audioSha256.slice(0, 16)}…</Mono>
+        {t("هش صوت:", "audio sha256:")} <Mono>{detail.media.audioSha256.slice(0, 16)}…</Mono> ·{" "}
+        {t("پایان خالی در خروجی = شروع خط بعدی (آخرین خط = پایان صوت)", "empty end = next line's start at export (last line = audio end)")}
       </div>
     </div>
   );

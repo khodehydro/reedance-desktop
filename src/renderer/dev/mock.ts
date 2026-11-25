@@ -564,6 +564,7 @@ export function createMockBridge(): StudioApi {
 
   const summary = (): ProjectSummary => ({
     projectId: "prj-preview",
+    kind: "song",
     songId: content.songId,
     targetLanguage: content.targetLanguage,
     locale: content.locale,

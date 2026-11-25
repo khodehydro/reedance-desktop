@@ -75,7 +75,13 @@ export async function publishExport(exportId: string, manifestUrlRaw: string): P
     throw new Error(`remote manifest signature rejected: ${verdict.reason ?? "unknown reason"}`);
   }
   const payload = verdict.payload as ManifestPayload;
-  if (payload.songId !== row.song_id) throw new Error("remote manifest is for a different songId");
+  // Song payloads carry songId (v1), ReeTalk payloads dialogueId (v2); the
+  // stored row's song_id holds whichever id created the project.
+  const remoteId =
+    (payload as { manifestVersion?: number }).manifestVersion === 2
+      ? (payload as unknown as { dialogueId?: string }).dialogueId
+      : payload.songId;
+  if (remoteId !== row.song_id) throw new Error("remote manifest is for a different content id");
   if (payload.package.sha256 !== row.pack_sha256) throw new Error("remote manifest points at a different pack hash");
   if (payload.package.sizeBytes !== row.pack_size) throw new Error("remote manifest reports a different pack size");
   if (payload.contentVersionCode !== row.version_code) throw new Error("remote manifest is not this content version");

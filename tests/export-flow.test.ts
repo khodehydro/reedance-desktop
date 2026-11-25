@@ -172,3 +172,58 @@ test("a draft without a story still exports a valid lesson", () => {
   assert.equal(lesson.story, undefined);
   assert.deepEqual(validateLessonStructure(lesson), []);
 });
+
+test("missing line ends fall back to the next start and the audio duration", () => {
+  const lesson = assembleLesson({ content: draft, marks, media, rights });
+  assert.deepEqual(
+    lesson.lyrics.map((line) => line.endMs),
+    [2000, 4000],
+    "line 1 ends where line 2 starts; the last line closes at the audio end",
+  );
+  assert.deepEqual(validateLessonStructure(lesson), []);
+  assert.deepEqual(validateLessonSemantics(lesson, media.durationMs, media.audioSha256).filter((issue) => issue.severity === "error"), []);
+});
+
+test("a recorded end is preserved as a silence gap", () => {
+  const gapped = marks.map((mark, index) => (index === 0 ? { ...mark, endMs: 1500 } : mark));
+  const lesson = assembleLesson({ content: draft, marks: gapped, media, rights });
+  assert.deepEqual(
+    lesson.lyrics.map((line) => line.endMs),
+    [1500, 4000],
+    "the recorded end stays untouched; only the missing end is filled",
+  );
+});
+
+test("inverted or out-of-range ends are blocking; an overlap with the next line warns", () => {
+  const lesson = assembleLesson({ content: draft, marks, media, rights });
+
+  const inverted = {
+    ...lesson,
+    lyrics: [{ ...lesson.lyrics[0], endMs: 0 }, { ...lesson.lyrics[1] }],
+  };
+  assert.ok(
+    validateLessonSemantics(inverted, media.durationMs, media.audioSha256).some(
+      (issue) => issue.severity === "error" && issue.message.includes("after startMs"),
+    ),
+  );
+
+  const outside = {
+    ...lesson,
+    lyrics: [{ ...lesson.lyrics[0], endMs: 9000 }, { ...lesson.lyrics[1] }],
+  };
+  assert.ok(
+    validateLessonSemantics(outside, media.durationMs, media.audioSha256).some(
+      (issue) => issue.severity === "error" && issue.message.includes("end of the audio"),
+    ),
+  );
+
+  const overlapping = {
+    ...lesson,
+    lyrics: [{ ...lesson.lyrics[0], endMs: 2500 }, { ...lesson.lyrics[1] }],
+  };
+  const issues = validateLessonSemantics(overlapping, media.durationMs, media.audioSha256);
+  assert.ok(
+    issues.some((issue) => issue.severity === "warning" && issue.message.includes("overlaps the next line")),
+    "an end past the next start is a warning, not a hard failure",
+  );
+});

@@ -237,7 +237,7 @@ test("a second export reserves the next version code and keeps the first pack", 
 });
 
 test("editing content keeps export possible but revokes the recorded approval and the review flags", () => {
-  const content = getProjectDetail(projectId).content;
+  const content = getProjectDetail(projectId).content as DraftContent;
   const edited: DraftContent = {
     ...content,
     lyrics: content.lyrics.map((line) =>
@@ -276,7 +276,7 @@ test("editing content keeps export possible but revokes the recorded approval an
 });
 
 test("an untimed project reports only the reasons that actually block the file", () => {
-  const content = getProjectDetail(projectId).content;
+  const content = getProjectDetail(projectId).content as DraftContent;
   saveMarks(
     projectId,
     content.lyrics.map((line) => ({ lineId: line.id, startMs: null, endMs: null })),
@@ -296,7 +296,7 @@ test("an untimed project reports only the reasons that actually block the file",
 
 test("the timeline can distribute every line evenly and export immediately", () => {
   const detail = distributeMarks(projectId);
-  assert.equal(detail.marks.length, detail.content.lyrics.length);
+  assert.equal(detail.marks.length, (detail.content as DraftContent).lyrics.length);
   assert.ok(detail.marks.every((mark) => mark.startMs !== null));
   assert.ok(detail.marks.every((mark) => (mark.startMs ?? 0) < audio.durationMs));
   assert.ok(detail.preflight.canExport);

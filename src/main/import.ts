@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import { SUPPORTED_LANGUAGES, isTargetLanguage, type DraftContent, type ImportOutcome, type Issue, type Level, type TargetLanguage } from "../shared/types";
+import { SUPPORTED_LANGUAGES, isTargetLanguage, type DraftContent, type ImportOutcome, type Issue, type Level, type ReetalkDraft, type TargetLanguage } from "../shared/types";
 import { audit, flushNow } from "./db";
 import { readFileLimited } from "./paths";
 import { createProject, saveRawSnapshot } from "./projects";
+import { isReeTalkDraft, validateReeTalkDraft } from "./reetalk";
 import { sha256Hex } from "./util";
 import {
   findForbiddenKeys,
@@ -16,12 +17,15 @@ import {
 const DRAFT_MAX_BYTES = 4 * 1024 * 1024;
 
 /**
- * Import of a content-only `.rddraft.json`.
+ * Import of a content-only draft: a song `.rddraft.json` or a ReeTalk
+ * `.reetalkdraft.json`.
  *
  * The draft is untrusted input: it is read as UTF-8 (BOM rejected), parsed with
- * a duplicate-key rejecting parser, scanned for media/timings/keys, validated
- * against `urn:reedance:draft:v1` and the semantic rules. Only then is a local
- * project created; the original bytes are kept as an immutable snapshot.
+ * a duplicate-key rejecting parser and scanned for media/timings/keys. The
+ * profile is decided by `contentType` — a ReeTalk file never enters the song
+ * pipeline (and vice versa) — then the matching validator runs. Only after all
+ * of that is a local project created; the original bytes are kept as an
+ * immutable snapshot.
  */
 export function importDraftFile(filePath: string): ImportOutcome {
   const bytes = readFileLimited(filePath, DRAFT_MAX_BYTES);
@@ -44,6 +48,29 @@ export function importDraftFile(filePath: string): ImportOutcome {
   if (forbidden.length) {
     throw new Error(`draft contains media/timing data that only Windows may add: ${formatIssues(forbidden.slice(0, 4))}`);
   }
+  const sha = sha256Hex(bytes);
+
+  if (isReeTalkDraft(parsed) || (parsed && typeof parsed === "object" && (parsed as { contentType?: unknown }).contentType === "reetalk")) {
+    const issues = validateReeTalkDraft(parsed);
+    const errors = issues.filter((issue) => issue.severity === "error");
+    if (errors.length) {
+      throw new Error(`ReeTalk draft failed validation: ${formatIssues(errors.slice(0, 6))}`);
+    }
+    const draft = parsed as ReetalkDraft;
+    const snapshotPath = saveRawSnapshot(sha, bytes);
+    const projectId = createProject({ draft, rawPath: snapshotPath, rawSha256: sha });
+    audit(projectId, "raw-snapshot-stored", "system", { rawPath: snapshotPath, rawSha256: sha });
+    audit(projectId, "reetalk-draft-imported", "operator", { dialogueId: draft.dialogueId, turns: draft.turns.length });
+    flushNow();
+    return {
+      projectId,
+      songId: draft.dialogueId,
+      title: draft.title.fa,
+      issues: [],
+      warnings: [],
+    };
+  }
+
   const structural = validateDraftStructure(parsed);
   if (structural.length) {
     throw new Error(`draft failed schema validation: ${formatIssues(structural.slice(0, 6))}`);
@@ -55,7 +82,6 @@ export function importDraftFile(filePath: string): ImportOutcome {
     throw new Error(`draft has blocking content errors: ${formatIssues(errors.slice(0, 6))}`);
   }
   const warnings: Issue[] = semantic.filter((issue) => issue.severity === "warning");
-  const sha = sha256Hex(bytes);
   const snapshotPath = saveRawSnapshot(sha, bytes);
   const projectId = createProject({ draft, rawPath: snapshotPath, rawSha256: sha });
   audit(projectId, "raw-snapshot-stored", "system", { rawPath: snapshotPath, rawSha256: sha });

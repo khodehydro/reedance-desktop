@@ -5,8 +5,9 @@ import { unzipSync, zipSync, type Zippable } from "fflate";
  *
  * Contract v1 restricts the archive to flat ASCII entry names at the root,
  * STORE or DEFLATE only, no extra fields, no data descriptors, no encryption,
- * no ZIP64, no duplicate entries and at most four entries
- * (lesson.json + one audio + optional cover + optional story audio).
+ * no ZIP64 and no duplicate entries. A song pack has at most four entries
+ * (lesson.json + one audio + optional cover + optional story audio); a ReeTalk
+ * pack has exactly three (dialogue.json + one audio + one cover).
  *
  * Every entry is packed at the maximum DEFLATE level so the pack is tighter
  * than a standard ZIP: lesson.json and uncompressed sources (WAV PCM) shrink
@@ -17,12 +18,21 @@ export const ZIP_MAX_ENTRIES = 4;
 export const ZIP_MAX_TOTAL = 252 * 1024 * 1024;
 export const ZIP_MAX_PLAINTEXT = 256 * 1024 * 1024;
 
+/**
+ * Content profile of the plaintext ZIP.
+ *
+ * - `lesson`  — song pack: `lesson.json` + one audio + optional cover + optional story (2..4 entries).
+ * - `reetalk` — dialogue pack: exactly `dialogue.json` + one audio + one cover (3 entries, cover mandatory).
+ */
+export type ZipProfile = "lesson" | "reetalk";
+
 /** Maximum DEFLATE level — the pack must beat a standard ZIP, not match it. */
 export const MAX_DEFLATE_LEVEL = 9;
 
 export interface ZipEntryInput {
   name:
     | "lesson.json"
+    | "dialogue.json"
     | "audio.mp3" | "audio.m4a" | "audio.wav"
     | "cover.jpg" | "cover.png" | "cover.webp"
     | "story.mp3" | "story.m4a" | "story.wav";
@@ -33,10 +43,27 @@ export interface ZipEntryInput {
 
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/;
 
-export function buildZip(entries: ZipEntryInput[]): Buffer {
+function validateProfile(entries: ZipEntryInput[], profile: ZipProfile): void {
+  const names = entries.map((entry) => entry.name);
+  if (profile === "reetalk") {
+    if (entries.length !== 3) {
+      throw new Error(`a ReeTalk ZIP must contain exactly 3 entries (dialogue.json + audio + cover), found ${entries.length}`);
+    }
+    if (!names.includes("dialogue.json")) throw new Error("ReeTalk ZIP has no dialogue.json");
+    if (names.includes("lesson.json")) throw new Error("a ReeTalk ZIP must not contain lesson.json");
+    if (names.some((name) => name.startsWith("story."))) throw new Error("a ReeTalk ZIP must not contain story audio");
+    if (!names.some((name) => name.startsWith("audio."))) throw new Error("a ReeTalk ZIP has no audio entry");
+    if (!names.some((name) => name.startsWith("cover."))) throw new Error("a ReeTalk ZIP has no cover entry");
+    return;
+  }
   if (entries.length < 2 || entries.length > ZIP_MAX_ENTRIES) {
     throw new Error(`ZIP must contain 2..${ZIP_MAX_ENTRIES} entries (lesson + audio + optional cover + optional story audio)`);
   }
+  if (!names.includes("lesson.json")) throw new Error("ZIP has no lesson.json");
+}
+
+export function buildZip(entries: ZipEntryInput[], profile: ZipProfile = "lesson"): Buffer {
+  validateProfile(entries, profile);
   const seen = new Set<string>();
   const zippable: Zippable = {};
   let total = 0;
@@ -68,7 +95,7 @@ export interface ReadZipResult {
  * memory with size and ratio limits, so a hostile archive cannot escape a
  * staging directory (there is no staging directory).
  */
-export function readZipStrict(data: Buffer, maxTotal = ZIP_MAX_TOTAL): ReadZipResult {
+export function readZipStrict(data: Buffer, maxTotal = ZIP_MAX_TOTAL, profile: ZipProfile = "lesson"): ReadZipResult {
   if (data.length > ZIP_MAX_PLAINTEXT) throw new Error("ZIP is larger than 256 MiB");
   const files: Record<string, Buffer> = {};
   let total = 0;
@@ -96,6 +123,14 @@ export function readZipStrict(data: Buffer, maxTotal = ZIP_MAX_TOTAL): ReadZipRe
     if (total > maxTotal) throw new Error("extracted ZIP content exceeds the contract limit");
     files[name] = Buffer.from(bytes);
     entries.push({ name, size: bytes.length });
+  }
+  if (profile === "reetalk") {
+    if (entries.length !== 3) {
+      throw new Error(`a ReeTalk ZIP must contain exactly 3 entries, found ${entries.length}`);
+    }
+    if (!files["dialogue.json"]) throw new Error("ZIP has no dialogue.json");
+    if (files["lesson.json"]) throw new Error("a ReeTalk ZIP must not contain lesson.json");
+    return { entries, files };
   }
   if (entries.length < 2 || entries.length > ZIP_MAX_ENTRIES) {
     throw new Error(`ZIP must contain 2..${ZIP_MAX_ENTRIES} entries, found ${entries.length}`);

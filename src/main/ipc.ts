@@ -24,7 +24,7 @@ import {
   getProjectDetail,
   listLibrary,
   loadProject,
-  readContent,
+  readProjectContent,
   readMarks,
   readMedia,
   removeProject,
@@ -394,7 +394,7 @@ export function registerIpc(): void {
       const endMs = value.endMs === null || value.endMs === undefined ? null : num(value.endMs, "endMs", 0);
       return { lineId: id(value.lineId, "lineId"), startMs, endMs };
     });
-    const content = readContent(loadProject(project));
+    const content = readProjectContent(loadProject(project));
     saveMarks(project, patch, readMedia(project)?.media ?? null, content);
     notifyChanged();
     return getProjectDetail(project);

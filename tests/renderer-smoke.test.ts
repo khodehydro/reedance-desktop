@@ -173,7 +173,7 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
   (timelineTab as unknown as HTMLElement).click();
   await new Promise((resolve) => setTimeout(resolve, 250));
   const timelineText = window.document.body.textContent ?? "";
-  assert.ok(/ثبت زمان سطر|Capture line time/.test(timelineText), "the waveform editor mounts");
+  assert.ok(/ثبت شروع سطر|Capture line start/.test(timelineText), "the waveform editor mounts");
   assert.ok(window.document.querySelector(".wave-canvas"), "the waveform canvas is rendered");
   assert.ok(window.document.querySelectorAll(".line-row").length > 0, "lyric lines are listed under the waveform");
 

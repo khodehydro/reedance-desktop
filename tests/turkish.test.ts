@@ -107,7 +107,7 @@ test("a Turkish draft passes the widened contract and imports", () => {
 test("a Turkish project exports a pack whose lesson.json validates", () => {
   const detail = getProjectDetail(projectId);
 
-  saveContent(projectId, { ...detail.content, level: "A2" });
+  saveContent(projectId, { ...(detail.content as DraftContent), level: "A2" });
   const imported = importAudio(projectId, path.join(fixtures, "audio.wav"), null);
   saveMedia(projectId, imported.media, true);
   saveMarks(

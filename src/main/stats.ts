@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import { SUPPORTED_LANGUAGES, type ExportSummary, type LanguageStats, type StatsReport, type StatsScope, type TargetLanguage } from "../shared/types";
+import { SUPPORTED_LANGUAGES, isReeTalkContent, type ExportSummary, type LanguageStats, type StatsReport, type StatsScope, type TargetLanguage } from "../shared/types";
 import { all, get } from "./db";
-import { exportSummaries, readContent, type ProjectRow } from "./projects";
+import { exportSummaries, readProjectContent, type ProjectRow } from "./projects";
 import { canonicalJson, nowIso, sha256Hex } from "./util";
 
 /**
@@ -81,10 +81,22 @@ function computeDraftStats(language: TargetLanguage | "all"): { languages: Langu
   const songIds = new Set<string>();
   const hashes: string[] = [];
   for (const row of rows) {
-    const content = readContent(row);
+    const content = readProjectContent(row);
     if (language !== "all" && content.targetLanguage !== language) continue;
     const entry = languages.get(content.targetLanguage) ?? emptyStats(content.targetLanguage);
     entry.versions += 1; // for drafts this column counts projects
+    if (isReeTalkContent(content)) {
+      // ReeTalk maps its learning blocks onto the same report columns.
+      entry.sentences += content.learning.phrases.length;
+      entry.grammarCards += content.learning.grammar.length;
+      entry.lyricLines += content.turns.length;
+      entry.questions += content.learning.questions.length;
+      entry.vocabTables += content.learning.grammar.reduce((total, card) => total + card.tables.length, 0);
+      languages.set(content.targetLanguage, entry);
+      songIds.add(content.dialogueId);
+      hashes.push(`${content.dialogueId}:${sha256Hex(canonicalJson(content)).slice(0, 16)}`);
+      continue;
+    }
     entry.lexemeEntries += content.vocabulary.length;
     entry.sentences += content.sentences.length;
     entry.grammarCards += content.grammar.length;
@@ -97,18 +109,25 @@ function computeDraftStats(language: TargetLanguage | "all"): { languages: Langu
     hashes.push(`${content.songId}:${sha256Hex(canonicalJson(content)).slice(0, 16)}`);
   }
   for (const entry of languages.values()) {
-    const rowsForLanguage = rows.filter((row) => readContent(row).targetLanguage === entry.targetLanguage);
+    const rowsForLanguage = rows.filter((row) => readProjectContent(row).targetLanguage === entry.targetLanguage);
     const uniqueKeys = new Set<string>();
     const uniqueLexemes = new Set<string>();
     for (const row of rowsForLanguage) {
-      for (const word of readContent(row).vocabulary) {
+      const content = readProjectContent(row);
+      if (isReeTalkContent(content)) continue;
+      for (const word of content.vocabulary) {
         uniqueKeys.add(word.normalizedKey.normalize("NFC").toLowerCase());
         uniqueLexemes.add(word.lexemeId);
       }
     }
     entry.uniqueLexemes = uniqueKeys.size;
     entry.lexemeEntries = uniqueLexemes.size;
-    entry.songs = new Set(rowsForLanguage.map((row) => readContent(row).songId)).size;
+    entry.songs = new Set(
+      rowsForLanguage.map((row) => {
+        const content = readProjectContent(row);
+        return isReeTalkContent(content) ? content.dialogueId : content.songId;
+      }),
+    ).size;
   }
   const notices = [
     "Draft scope counts the editable projects in the studio, not published packs; lyric lines are reported separately from sentences.",

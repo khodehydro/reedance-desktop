@@ -71,13 +71,20 @@ export function assembleLesson(input: {
           }
         : {}),
     },
-    lyrics: content.lyrics.map((line) => {
+    lyrics: content.lyrics.map((line, index) => {
       const mark = byLine.get(line.id);
       if (!mark || mark.startMs === null) throw new Error(`line "${line.id}" has no start time`);
+      // Recorded ends are kept verbatim so real silence between lines stays
+      // representable. A missing end is derived at export time: the next
+      // line's start, and the audio duration for the last line — never an
+      // estimate, just the fallback the operator's own timeline implies.
+      const next = content.lyrics[index + 1];
+      const nextStart = next ? byLine.get(next.id)?.startMs ?? null : null;
+      const endMs = mark.endMs ?? nextStart ?? Math.round(media.durationMs);
       return {
         id: line.id,
         startMs: mark.startMs,
-        ...(mark.endMs !== null ? { endMs: mark.endMs } : {}),
+        endMs,
         text: line.text,
         translationFa: line.translationFa,
         translationEn: line.translationEn,

@@ -102,7 +102,7 @@ test("the media row persists the story audio columns and readMedia returns them"
 
 test("the export gate opens once audio, marks and rights are complete", () => {
   const detail = getProjectDetail(projectId);
-  const markIds = detail.content.lyrics.map((line) => line.id);
+  const markIds = (detail.content as DraftContent).lyrics.map((line) => line.id);
   saveMarks(
     projectId,
     markIds.map((lineId, index) => ({ lineId, startMs: index * 1000, endMs: null })),

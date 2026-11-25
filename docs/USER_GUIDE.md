@@ -23,7 +23,7 @@
 | ۳. سینک لیریک | تب «تایم‌لاین» → دکمهٔ **توزیع یکنواخت** یا ثبت دستی با `M` | هر سطر زمان شروع دارد، زمان‌ها صعودی و داخل مدت صوت‌اند |
 | ۴. خروجی | تب «خروجی» → دکمهٔ **دریافت فایل خروجی** | ساخت `.rdpack` (کلید `enc-main`) + `latest.json` امضاشده؛ بدون هیچ رمزی؛ همه‌ی داخلی بسته با حداکثر سطح DEFLATE فشرده می‌شود |
 
-سینک لیریک: محور تایم‌لاین **از چپ به راست** است (همان جهت پخش). روی تایم‌لاین **خط عموی نارنجی (نوک پخش)** و **خط عموی آبی (خط ثبت)** نمایش داده می‌شود: خط آبی را با کشیدن یا کلیک روی waveform جابه‌جا کنید تا زمانش تغییر کند (همزمان صدا هم به همان نقطه می‌رود)، سپس دکمهٔ **⏱ ثبت شروع سطر (M)** زمان شروع سطر انتخابی را روی همان نقطه ثبت می‌کند. هر سطر را هم می‌توانید مستقیماً از **⏱ ثبت شروع** کناری ثبت کنید. بزرگ‌نمایی با اسلایدر «بزرگ‌نمایی»، چرخ‌ماوس روی تایم‌لاین یا دکمهٔ **هم‌راست‌سازی** انجام می‌شود؛ برای جای‌گذاری دقیق، خط آبی را با کشیدن دقیق جابه‌جا کنید.
+سینک لیریک: محور تایم‌لاین **از چپ به راست** است (همان جهت پخش). روی تایم‌لاین **خط عموی نارنجی (نوک پخش)** و **خط عموی آبی (خط ثبت)** نمایش داده می‌شود: خط آبی را با کشیدن یا کلیک روی waveform جابه‌جا کنید تا زمانش تغییر کند (همزمان صدا هم به همان نقطه می‌رود)، سپس دکمهٔ **⏱ ثبت شروع سطر (M)** زمان شروع سطر انتخابی را روی همان نقطه ثبت می‌کند و **⏱ ثبت پایان سطر (E)** زمان پایانش را. هر سطر را هم می‌توانید مستقیماً از **⏱ ثبت شروع / ⏱ ثبت پایان** کناری ثبت کنید. اگر پایانی ثبت نکنید، در خروجی زمان پایانِ همان سطر = شروع سطر بعدی (و برای آخرین سطر = پایان صوت) پر می‌شود؛ پایان‌های ثبت‌شده دست‌نخورده می‌مانند و فاصلهٔ سکوت بین سطرها حفظ می‌شود. بزرگ‌نمایی با اسلایدر «بزرگ‌نمایی»، چرخ‌ماوس روی تایم‌لاین یا دکمهٔ **هم‌راست‌سازی** انجام می‌شود؛ برای جای‌گذاری دقیق، خط آبی را با کشیدن دقیق جابه‌جا کنید.
 
 اگر ۴۰ سطر یا بیشتر دارید، از دکمهٔ «توزیع یکنواخت N سطر» (در تایم‌لاین یا در تب خروجی) استفاده کنید: زمان شروع همهٔ سطرها به‌طور یکنواخت روی مدت صوت پخش می‌شود و بعد فقط سطرهایی که دقیق نیستند را اصلاح می‌کنید.
 
@@ -64,7 +64,7 @@
 
 ## میان‌برهای تایم‌لاین
 
-`Space` پخش/توقف · `M` ثبت زمان برای سطر انتخابی و رفتن به سطر بعد · `←/→` جابه‌جایی ۱۰۰ میلی‌ثانیه (با `Shift` یک ثانیه) · `J/K` سطر قبل/بعد · `A/B` تعیین نقطهٔ حلقه · چرخ ماوس روی خط‌کش برای بزرگ‌نمایی.
+`Space` پخش/توقف · `M` ثبت زمان **شروع** سطر انتخابی و رفتن به سطر بعد · `E` ثبت زمان **پایان** سطر انتخابی · `←/→` جابه‌جایی ۱۰۰ میلی‌ثانیه (با `Shift` یک ثانیه) · `J/K` سطر قبل/بعد · `A/B` تعیین نقطهٔ حلقه · چرخ ماوس روی خط‌کش برای بزرگ‌نمایی.
 
 ---
 
@@ -86,8 +86,8 @@ Long songs: use **Distribute N lines** (timeline or export tab) to lay a startin
 
 No password at all: packs are sealed with the fixed `enc-main` key and the Android app already holds it, so the file opens itself on the phone. `Settings → File encryption key` only shows the key id, its source and a short fingerprint. If the badge says **test key**, load the real key file once with the import button; from then on every export uses the publishing key. See `docs/CRYPTO.md`.
 
-Keyboard: `Space` play/pause, `M` capture a mark and advance, `←/→` ±100 ms (`Shift` ±1 s), `J/K` previous/next line, `A/B` loop points.
+Keyboard: `Space` play/pause, `M` capture the selected line's start and advance, `E` capture the selected line's end, `←/→` ±100 ms (`Shift` ±1 s), `J/K` previous/next line, `A/B` loop points.
 
-**Lyric sync.** The timeline axis runs **left to right**, the same direction as playback. The waveform shows an orange **playhead** and a blue **capture line**: drag the capture line (or click the waveform) to move it — the audio follows — then press **⏱ Capture line start (M)** to stamp the selected line's start at that point. You can also press **⏱ Capture start** next to any line directly. Zoom with the zoom slider, the mouse wheel over the timeline, or the **Fit** button; drag the capture line for precise placement.
+**Lyric sync.** The timeline axis runs **left to right**, the same direction as playback. The waveform shows an orange **playhead** and a blue **capture line**: drag the capture line (or click the waveform) to move it — the audio follows — then press **⏱ Capture line start (M)** to stamp the selected line's start at that point, or **⏱ Capture line end (E)** for its end. You can also press **⏱ Capture start / ⏱ Capture end** next to any line directly. A line exported without a recorded end gets the next line's start (last line: the audio duration); recorded ends stay untouched, so silence gaps survive the export. Zoom with the zoom slider, the mouse wheel over the timeline, or the **Fit** button; drag the capture line for precise placement.
 
 **Story section.** Every song can also carry a story. In the **Story** tab you write the story title and pages; each page holds lines with the same four fields a lyric line has — text, FA translation, EN translation and word-by-word tokens (use *Rebuild from text*). **Story narration audio**: add an audio file from your own computer (**mp3, m4a or wav**) exactly like the song audio — play, remove or replace it with *Choose another audio*. At export it ships in the pack as `story.<ext>` and is referenced from `lesson.json` with its hash and duration. The **Speak page / Speak line** buttons read the text with the system voice so you can check the narration while authoring (that is only a preview — the audio that ships is the file you selected). Story lines are never timed or synced; at export they enter `lesson.json` in the shape the Android app reads (`story.title` + `story.pages` with per-line and per-word translations). A story with no lines is left out of the pack.

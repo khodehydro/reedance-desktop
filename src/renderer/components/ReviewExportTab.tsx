@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { ExportOutcome, ExportSummary, ProjectDetail } from "@shared/types";
+import { isReeTalkContent, type ExportOutcome, type ExportSummary, type ProjectDetail } from "@shared/types";
 import { api } from "../api";
 import { useLang } from "../i18n";
 import { formatBytes, formatDate, shortHash } from "../format";
@@ -33,7 +33,7 @@ export function ReviewExportTab({
   const [manifestBaseUrl, setManifestBaseUrl] = useState("");
   const [filling, setFilling] = useState(false);
 
-  const lineCount = detail.content.lyrics.length;
+  const lineCount = isReeTalkContent(detail.content) ? detail.content.turns.length : detail.content.lyrics.length;
   const timedCount = detail.marks.filter((mark) => mark.startMs !== null).length;
   const audioReady = !!detail.media && detail.media.durationMs > 0;
   const ready = audioReady && timedCount === lineCount && lineCount > 0;

@@ -1,21 +1,35 @@
 import fs from "node:fs";
 import path from "node:path";
-import type {
-  ExportOutcome,
-  Lesson,
-  ManifestEnvelope,
-  ManifestPayload,
-  MediaInfo,
-  PreflightReport,
+import {
+  isReeTalkContent,
+  type ExportOutcome,
+  type Lesson,
+  type ManifestEnvelope,
+  type ManifestPayload,
+  type MediaInfo,
+  type PreflightReport,
+  type ReetalkDialogue,
+  type ReetalkManifestPayload,
 } from "../shared/types";
 import { audit, flushNow, get, run, scalar, transaction } from "./db";
 import { ensureStudioKeys, getAesKey, getSigningPrivateKey, getSigningPublicKey, PACK_KEY_ID, SIGNING_KEY_ID } from "./keys";
 import { assertInside, writeFileAtomic } from "./paths";
-import { EXPORT_GATES, buildLessonForExport, exportRow, loadProject, preflight, readMedia, readPayload } from "./projects";
+import {
+  buildLessonForExport,
+  buildReeTalkForExport,
+  exportGatesFor,
+  exportRow,
+  loadProject,
+  preflight,
+  readMedia,
+  readPayload,
+  readProjectContent,
+} from "./projects";
+import { validateReeTalkDialogue } from "./reetalk";
 import { nowIso, sha256Hex } from "./util";
 import { decryptPack, encryptPack, packFileName, parsePackHeader } from "./crypto/pack";
 import { signManifest, verifyManifest } from "./crypto/sign";
-import { buildZip, readZipStrict, type ZipEntryInput } from "./crypto/zip";
+import { buildZip, readZipStrict, ZIP_MAX_TOTAL, type ZipEntryInput, type ZipProfile } from "./crypto/zip";
 import { normalizeKey, validateLessonSemantics, validateLessonStructure } from "./validation";
 
 const LESSON_MAX_BYTES = 4 * 1024 * 1024;
@@ -92,16 +106,29 @@ export function songArchiveDir(context: ExportContext, targetLanguage: string, s
  * immutable version. Everything is re-opened and verified before the operator
  * sees a success message.
  */
+/**
+ * Export dispatch: the profile of the stored project decides whether a song
+ * `lesson.json` pack or a ReeTalk `dialogue.json` pack is produced. Both use
+ * the same container, keys, signing domain and versioning rules.
+ */
 export function runExport(projectId: string, options: ExportOptions, context: ExportContext): ExportOutcome {
-  const report = preflight(projectId);
-  if (!report.canExport) {
-    // Only the gates that actually block an export are reported; the review and
-    // approval gates still exist in the data model but never lock the file.
-    const failed = report.gates
-      .filter((gate) => !gate.ok && (EXPORT_GATES as readonly string[]).includes(gate.key))
-      .map((gate) => `${gate.labelEn}: ${gate.detail}`);
-    throw new Error(`export is locked — ${failed.join("; ")}`);
-  }
+  const content = readProjectContent(loadProject(projectId));
+  return isReeTalkContent(content)
+    ? runReeTalkExport(projectId, options, context)
+    : runSongExport(projectId, options, context);
+}
+
+function assertExportLock(report: ReturnType<typeof preflight>, kind: "song" | "reetalk"): void {
+  if (report.canExport) return;
+  // Only the gates that actually block an export are reported; the review and
+  // approval gates still exist in the data model but never lock the file.
+  const failed = report.gates
+    .filter((gate) => !gate.ok && (exportGatesFor(kind) as readonly string[]).includes(gate.key))
+    .map((gate) => `${gate.labelEn}: ${gate.detail}`);
+  throw new Error(`export is locked — ${failed.join("; ")}`);
+}
+
+function assertCommonOptions(options: ExportOptions): void {
   if (!/^\d+\.\d+\.\d+$/.test(options.displayVersion)) {
     throw new Error("displayVersion must look like 1.0.0");
   }
@@ -116,6 +143,12 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
   if (options.signatureKeyId !== SIGNING_KEY_ID) {
     throw new Error(`packs must use the embedded signing key ${SIGNING_KEY_ID}`);
   }
+}
+
+function runSongExport(projectId: string, options: ExportOptions, context: ExportContext): ExportOutcome {
+  const report = preflight(projectId);
+  assertExportLock(report, "song");
+  assertCommonOptions(options);
 
   const { lesson, media } = buildLessonForExport(projectId);
   const semantic = validateLessonSemantics(lesson, media.durationMs, media.audioSha256);
@@ -219,11 +252,13 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
   const verification = verifyArtifacts({
     packPath,
     manifestPath: manifestCopy,
-    lessonBytes,
+    contentBytes: lessonBytes,
     audioSha256: media.audioSha256,
+    mediaDurationMs: media.durationMs,
     publicKey: getSigningPublicKey(options.signatureKeyId),
     aesKey,
     expectedSha: packSha,
+    profile: "lesson",
   });
 
   const exportId = `exp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -319,14 +354,196 @@ export function runExport(projectId: string, options: ExportOptions, context: Ex
   };
 }
 
+/**
+ * ReeTalk export: exactly `dialogue.json + audio + cover` sealed under the
+ * same container/keys as a song pack, with a manifestVersion 2 payload. The
+ * version code is reserved first because it is embedded in dialogue.json, and
+ * every turn carries an explicit interval (recorded end, else the next turn's
+ * start, else the audio duration).
+ */
+function runReeTalkExport(projectId: string, options: ExportOptions, context: ExportContext): ExportOutcome {
+  const report = preflight(projectId);
+  assertExportLock(report, "reetalk");
+  assertCommonOptions(options);
+
+  const stored = readProjectContent(loadProject(projectId));
+  if (!isReeTalkContent(stored)) throw new Error("this project is not a ReeTalk dialogue");
+  const songDir = songArchiveDir(context, stored.targetLanguage, stored.dialogueId);
+  const versionCode = nextFreeVersion(stored.dialogueId, songDir);
+  const { dialogue, media } = buildReeTalkForExport(projectId, versionCode);
+
+  const dialogueBytes = Buffer.from(JSON.stringify(dialogue, null, 2), "utf8");
+  if (dialogueBytes.length > LESSON_MAX_BYTES) throw new Error("dialogue.json exceeds the 4 MiB contract limit");
+
+  const audioBytes = fs.readFileSync(media.audioPath);
+  if (sha256Hex(audioBytes) !== media.audioSha256) {
+    throw new Error("the project audio copy changed after import; re-select the audio");
+  }
+  if (!media.coverPath || !media.coverExtension) {
+    throw new Error("a ReeTalk pack needs a cover image: select the cover before exporting");
+  }
+  const coverBytes = fs.readFileSync(media.coverPath);
+  if (sha256Hex(coverBytes) !== media.coverSha256) {
+    throw new Error("the project cover copy changed after import; re-select the cover");
+  }
+
+  const entries: ZipEntryInput[] = [
+    { name: "dialogue.json", data: dialogueBytes, compress: true },
+    {
+      name: `audio.${media.extension}` as "audio.mp3" | "audio.m4a" | "audio.wav",
+      data: audioBytes,
+      compress: true,
+    },
+    {
+      name: `cover.${media.coverExtension}` as "cover.jpg" | "cover.png" | "cover.webp",
+      data: coverBytes,
+      compress: true,
+    },
+  ];
+  const zip = buildZip(entries, "reetalk");
+  const aesKey = getAesKey(options.encryptionKeyId);
+  const pack = encryptPack(zip, options.encryptionKeyId, aesKey);
+  if (pack.length > PACK_MAX_BYTES) throw new Error("pack exceeds the 256 MiB contract limit");
+  const packSha = sha256Hex(pack);
+
+  const fileName = packFileName(versionCode, packSha);
+  const packPath = path.join(songDir, fileName);
+  if (fs.existsSync(packPath)) {
+    const existing = fs.readFileSync(packPath);
+    if (sha256Hex(existing) !== packSha) throw new Error("an unrelated pack already occupies this version path");
+  } else {
+    writeFileAtomic(packPath, pack, 0o444);
+  }
+
+  // Payload v2: exactly the fields the ReeTalk contract defines — no
+  // displayVersion, no releasedAt, no lesson schema versions.
+  const payload: ReetalkManifestPayload = {
+    manifestVersion: 2,
+    contentType: "reetalk",
+    dialogueId: dialogue.dialogueId,
+    targetLanguage: dialogue.targetLanguage,
+    dialogueSchemaVersion: 1,
+    contentVersionCode: versionCode,
+    package: {
+      fileName,
+      sizeBytes: pack.length,
+      sha256: packSha,
+      encryptionKeyId: options.encryptionKeyId,
+    },
+  };
+  const payloadBytes = Buffer.from(JSON.stringify(payload), "utf8");
+  if (payloadBytes.length > 16 * 1024) throw new Error("manifest payload exceeds the 16 KiB contract limit");
+  const envelope: ManifestEnvelope = signManifest(payloadBytes, options.signatureKeyId, getSigningPrivateKey(options.signatureKeyId));
+  const manifestJson = JSON.stringify(envelope);
+  if (manifestJson.length > 32 * 1024) throw new Error("latest.json exceeds the 32 KiB contract limit");
+
+  const manifestCopy = path.join(songDir, "manifests", fileName.replace(/\.rdpack$/, ".json"));
+  if (!fs.existsSync(manifestCopy)) writeFileAtomic(manifestCopy, manifestJson, 0o444);
+  writeFileAtomic(path.join(songDir, "latest.json"), manifestJson, 0o444);
+
+  const verification = verifyArtifacts({
+    packPath,
+    manifestPath: manifestCopy,
+    contentBytes: dialogueBytes,
+    audioSha256: media.audioSha256,
+    mediaDurationMs: media.durationMs,
+    publicKey: getSigningPublicKey(options.signatureKeyId),
+    aesKey,
+    expectedSha: packSha,
+    profile: "reetalk",
+  });
+
+  const exportId = `exp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const revision = get<{ revision_id: string }>(
+    "SELECT revision_id FROM revisions WHERE project_id = ? ORDER BY imported_at DESC LIMIT 1",
+    [projectId],
+  );
+  transaction(() => {
+    run(
+      `INSERT INTO exports(export_id, project_id, revision_id, song_id, version_code, display_version, pack_path, pack_sha256, pack_size,
+        manifest_path, manifest_sha256, payload_json, encryption_key_id, signature_key_id, used_test_keys, exported_at, file_state)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'present')`,
+      [
+        exportId,
+        projectId,
+        revision?.revision_id ?? null,
+        dialogue.dialogueId,
+        versionCode,
+        options.displayVersion,
+        packPath,
+        packSha,
+        pack.length,
+        manifestCopy,
+        sha256Hex(manifestJson),
+        payloadBytes.toString("utf8"),
+        options.encryptionKeyId,
+        options.signatureKeyId,
+        0,
+        nowIso(),
+      ],
+    );
+    const grammarTables = dialogue.learning.grammar.reduce((total, card) => total + card.tables.length, 0);
+    run(
+      `INSERT INTO export_counts(export_id, sentence_count, grammar_count, lyric_line_count, idiom_count, question_count, vocab_table_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        exportId,
+        dialogue.learning.phrases.length,
+        dialogue.learning.grammar.length,
+        dialogue.turns.length,
+        0,
+        dialogue.learning.questions.length,
+        grammarTables,
+      ],
+    );
+    audit(projectId, "exported", "operator", {
+      exportId,
+      versionCode,
+      contentType: "reetalk",
+      packSha256: packSha,
+      sizeBytes: pack.length,
+      encryptionKeyId: options.encryptionKeyId,
+      signatureKeyId: options.signatureKeyId,
+      usedTestKeys: false,
+    });
+  });
+  flushNow();
+
+  return {
+    exportId,
+    versionCode,
+    displayVersion: options.displayVersion,
+    packPath,
+    packSha256: packSha,
+    packSize: pack.length,
+    manifestPath: manifestCopy,
+    manifestSha256: sha256Hex(manifestJson),
+    manifestUrlHint: options.manifestBaseUrl
+      ? `${options.manifestBaseUrl.replace(/\/+$/, "")}/${dialogue.targetLanguage}/${dialogue.dialogueId}/latest.json`
+      : "",
+    usedTestKeys: false,
+    verification: {
+      packLength: verification.packLength,
+      packSha256: verification.packSha256,
+      audioSha256: verification.audioSha256,
+      lessonSchemaOk: verification.lessonSchemaOk,
+      signatureVerified: verification.signatureVerified,
+      zipEntries: verification.zipEntries,
+      nonceBase64url: verification.nonceBase64url,
+    },
+  };
+}
+
 interface VerifyInput {
   packPath: string;
   manifestPath: string;
-  lessonBytes: Buffer;
+  contentBytes: Buffer;
   audioSha256: string;
+  mediaDurationMs: number;
   publicKey: Buffer | null;
   aesKey: Buffer;
   expectedSha: string;
+  profile: ZipProfile;
 }
 
 export function verifyArtifacts(input: VerifyInput) {
@@ -340,36 +557,65 @@ export function verifyArtifacts(input: VerifyInput) {
 
   const { plaintext } = decryptPack(packBytes, input.aesKey);
   detail.push("AES-256-GCM tag verified");
-  const zip = readZipStrict(plaintext);
+  const zip = readZipStrict(plaintext, ZIP_MAX_TOTAL, input.profile);
   detail.push(`zip entries: ${zip.entries.map((entry) => `${entry.name} (${entry.size})`).join(", ")}`);
-  const lessonFromPack = zip.files["lesson.json"];
-  if (!lessonFromPack || !lessonFromPack.equals(input.lessonBytes)) {
-    throw new Error("lesson.json inside the pack differs from the reviewed lesson");
-  }
-  const lesson = JSON.parse(lessonFromPack.toString("utf8")) as Lesson;
-  const schemaIssues = validateLessonStructure(lesson);
-  if (schemaIssues.length) {
-    throw new Error(`packed lesson failed schema validation: ${schemaIssues[0].path} ${schemaIssues[0].message}`);
-  }
-  const audioName = lesson.media.audio.path;
-  const audioBytes = zip.files[audioName];
-  if (!audioBytes) throw new Error(`pack is missing ${audioName}`);
-  const audioSha = sha256Hex(audioBytes);
-  if (audioSha !== input.audioSha256 || audioSha !== lesson.media.audio.sha256) {
-    throw new Error("audio hash inside the pack does not match the selected audio");
-  }
-  detail.push(`audio sha256 ok (${audioSha})`);
-  if (lesson.media.cover) {
-    const coverBytes = zip.files[lesson.media.cover.path];
-    if (!coverBytes) throw new Error("pack is missing the cover referenced by lesson.json");
-    if (sha256Hex(coverBytes) !== lesson.media.cover.sha256) throw new Error("cover hash mismatch inside the pack");
+
+  let contentOk = false;
+  let audioSha = "";
+  if (input.profile === "reetalk") {
+    const dialogueFromPack = zip.files["dialogue.json"];
+    if (!dialogueFromPack || !dialogueFromPack.equals(input.contentBytes)) {
+      throw new Error("dialogue.json inside the pack differs from the reviewed dialogue");
+    }
+    const dialogue = JSON.parse(dialogueFromPack.toString("utf8")) as ReetalkDialogue;
+    const contentIssues = validateReeTalkDialogue(dialogue, input.mediaDurationMs, input.audioSha256);
+    if (contentIssues.length) {
+      throw new Error(`packed dialogue failed validation: ${contentIssues[0].path} ${contentIssues[0].message}`);
+    }
+    const audioName = dialogue.media.audio.path;
+    const audioBytes = zip.files[audioName];
+    if (!audioBytes) throw new Error(`pack is missing ${audioName}`);
+    audioSha = sha256Hex(audioBytes);
+    if (audioSha !== input.audioSha256 || audioSha !== dialogue.media.audio.sha256) {
+      throw new Error("audio hash inside the pack does not match the selected audio");
+    }
+    detail.push(`audio sha256 ok (${audioSha})`);
+    const coverBytes = zip.files[dialogue.media.cover.path];
+    if (!coverBytes) throw new Error("pack is missing the cover referenced by dialogue.json");
+    if (sha256Hex(coverBytes) !== dialogue.media.cover.sha256) throw new Error("cover hash mismatch inside the pack");
     detail.push("cover sha256 ok");
-  }
-  if (lesson.media.storyAudio) {
-    const storyBytes = zip.files[lesson.media.storyAudio.path];
-    if (!storyBytes) throw new Error("pack is missing the story audio referenced by lesson.json");
-    if (sha256Hex(storyBytes) !== lesson.media.storyAudio.sha256) throw new Error("story audio hash mismatch inside the pack");
-    detail.push("story audio sha256 ok");
+    contentOk = true;
+  } else {
+    const lessonFromPack = zip.files["lesson.json"];
+    if (!lessonFromPack || !lessonFromPack.equals(input.contentBytes)) {
+      throw new Error("lesson.json inside the pack differs from the reviewed lesson");
+    }
+    const lesson = JSON.parse(lessonFromPack.toString("utf8")) as Lesson;
+    const schemaIssues = validateLessonStructure(lesson);
+    if (schemaIssues.length) {
+      throw new Error(`packed lesson failed schema validation: ${schemaIssues[0].path} ${schemaIssues[0].message}`);
+    }
+    const audioName = lesson.media.audio.path;
+    const audioBytes = zip.files[audioName];
+    if (!audioBytes) throw new Error(`pack is missing ${audioName}`);
+    audioSha = sha256Hex(audioBytes);
+    if (audioSha !== input.audioSha256 || audioSha !== lesson.media.audio.sha256) {
+      throw new Error("audio hash inside the pack does not match the selected audio");
+    }
+    detail.push(`audio sha256 ok (${audioSha})`);
+    if (lesson.media.cover) {
+      const coverBytes = zip.files[lesson.media.cover.path];
+      if (!coverBytes) throw new Error("pack is missing the cover referenced by lesson.json");
+      if (sha256Hex(coverBytes) !== lesson.media.cover.sha256) throw new Error("cover hash mismatch inside the pack");
+      detail.push("cover sha256 ok");
+    }
+    if (lesson.media.storyAudio) {
+      const storyBytes = zip.files[lesson.media.storyAudio.path];
+      if (!storyBytes) throw new Error("pack is missing the story audio referenced by lesson.json");
+      if (sha256Hex(storyBytes) !== lesson.media.storyAudio.sha256) throw new Error("story audio hash mismatch inside the pack");
+      detail.push("story audio sha256 ok");
+    }
+    contentOk = true;
   }
 
   const envelope = JSON.parse(fs.readFileSync(input.manifestPath, "utf8")) as ManifestEnvelope;
@@ -377,12 +623,23 @@ export function verifyArtifacts(input: VerifyInput) {
   if (!verification.ok) throw new Error(`latest.json signature is invalid: ${verification.reason}`);
   if (verification.payload?.package.sha256 !== packSha) throw new Error("manifest does not point at this pack");
   if (verification.payload?.package.sizeBytes !== packBytes.length) throw new Error("manifest size does not match the pack");
+  if (input.profile === "reetalk") {
+    const payload = verification.payload as unknown as ReetalkManifestPayload;
+    const dialogue = JSON.parse(input.contentBytes.toString("utf8")) as ReetalkDialogue;
+    if (payload.manifestVersion !== 2 || payload.contentType !== "reetalk") {
+      throw new Error("manifest payload is not a ReeTalk v2 payload");
+    }
+    if (payload.dialogueId !== dialogue.dialogueId) throw new Error("manifest dialogueId does not match dialogue.json");
+    if (payload.contentVersionCode !== dialogue.contentVersionCode) {
+      throw new Error("manifest contentVersionCode does not match dialogue.json");
+    }
+  }
   detail.push("Ed25519 signature verified");
   return {
     packLength: packBytes.length,
     packSha256: packSha,
     audioSha256: audioSha,
-    lessonSchemaOk: schemaIssues.length === 0,
+    lessonSchemaOk: contentOk,
     signatureVerified: true,
     zipEntries: zip.entries.map((entry) => entry.name),
     nonceBase64url: header.nonce.toString("base64url"),
@@ -395,6 +652,9 @@ export function verifyExport(exportId: string): { verified: boolean; detail: str
   if (!row) throw new Error("export not found");
   const detail: string[] = [];
   try {
+    const content = readProjectContent(loadProject(row.project_id));
+    const reetalk = isReeTalkContent(content);
+    const profile: ZipProfile = reetalk ? "reetalk" : "lesson";
     const packBytes = fs.readFileSync(row.pack_path);
     const sha = sha256Hex(packBytes);
     if (sha !== row.pack_sha256) throw new Error("pack hash differs from the recorded hash");
@@ -403,27 +663,45 @@ export function verifyExport(exportId: string): { verified: boolean; detail: str
     detail.push(`header keyId ${header.keyId}, nonce ${header.nonce.toString("base64url")}`);
     const { plaintext } = decryptPack(packBytes, getAesKey(row.encryption_key_id));
     detail.push("AES-256-GCM decrypted and authenticated");
-    const zip = readZipStrict(plaintext);
+    const zip = readZipStrict(plaintext, ZIP_MAX_TOTAL, profile);
     detail.push(`entries: ${zip.entries.map((entry) => entry.name).join(", ")}`);
-    const lesson = JSON.parse(zip.files["lesson.json"].toString("utf8")) as Lesson;
-    const issues = validateLessonStructure(lesson);
-    const semantics = validateLessonSemantics(lesson, lesson.media.audio.durationMs, lesson.media.audio.sha256);
-    if (issues.length || semantics.some((issue) => issue.severity === "error")) {
-      throw new Error("packed lesson failed validation");
+    let audioPath = "";
+    let audioDeclaredSha = "";
+    if (reetalk) {
+      const dialogue = JSON.parse(zip.files["dialogue.json"].toString("utf8")) as ReetalkDialogue;
+      const issues = validateReeTalkDialogue(dialogue, dialogue.media.audio.durationMs, dialogue.media.audio.sha256);
+      if (issues.some((issue) => issue.severity === "error")) {
+        throw new Error(`packed dialogue failed validation: ${issues[0].path} ${issues[0].message}`);
+      }
+      detail.push("dialogue.json validates against the ReeTalk contract");
+      audioPath = dialogue.media.audio.path;
+      audioDeclaredSha = dialogue.media.audio.sha256;
+    } else {
+      const lesson = JSON.parse(zip.files["lesson.json"].toString("utf8")) as Lesson;
+      const issues = validateLessonStructure(lesson);
+      const semantics = validateLessonSemantics(lesson, lesson.media.audio.durationMs, lesson.media.audio.sha256);
+      if (issues.length || semantics.some((issue) => issue.severity === "error")) {
+        throw new Error("packed lesson failed validation");
+      }
+      detail.push("lesson.json validates against urn:reedance:lesson:v1");
+      audioPath = lesson.media.audio.path;
+      audioDeclaredSha = lesson.media.audio.sha256;
     }
-    detail.push("lesson.json validates against urn:reedance:lesson:v1");
     const payload = readPayload(exportId) as ManifestPayload;
     if (payload.package.sha256 !== sha) throw new Error("manifest payload hash mismatch");
+    if (reetalk && (payload as unknown as ReetalkManifestPayload).contentType !== "reetalk") {
+      throw new Error("manifest payload is not a ReeTalk payload");
+    }
     const publicKey = getSigningPublicKey(row.signature_key_id);
     const envelope = JSON.parse(fs.readFileSync(row.manifest_path, "utf8")) as ManifestEnvelope;
     const verdict = verifyManifest(envelope, publicKey ?? Buffer.alloc(0));
     if (!verdict.ok) throw new Error(`signature invalid: ${verdict.reason}`);
     detail.push("Ed25519 manifest signature verified");
-    const media =
-      lesson.media.audio.sha256 === sha256Hex(zip.files[lesson.media.audio.path] ?? Buffer.alloc(0))
-        ? "audio bytes match lesson.json"
-        : "audio mismatch";
-    detail.push(media);
+    detail.push(
+      sha256Hex(zip.files[audioPath] ?? Buffer.alloc(0)) === audioDeclaredSha
+        ? `audio bytes match ${audioPath}`
+        : "audio mismatch",
+    );
     return { verified: true, detail };
   } catch (error) {
     detail.push(error instanceof Error ? error.message : String(error));

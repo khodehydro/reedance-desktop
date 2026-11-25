@@ -1,25 +1,32 @@
 import fs from "node:fs";
 import path from "node:path";
-import type {
-  DraftContent,
-  ExportSummary,
-  Issue,
-  Lesson,
-  LibraryData,
-  LyricMark,
-  MediaInfo,
-  PreflightGate,
-  PreflightReport,
-  ProjectDetail,
-  ProjectState,
-  ProjectSummary,
-  RightsChecklist,
-  TargetLanguage,
+import {
+  contentKindOf,
+  isReeTalkContent,
+  type ContentKind,
+  type DraftContent,
+  type ExportSummary,
+  type Issue,
+  type Lesson,
+  type LibraryData,
+  type LyricMark,
+  type MediaInfo,
+  type PreflightGate,
+  type PreflightReport,
+  type ProjectContent,
+  type ProjectDetail,
+  type ProjectState,
+  type ProjectSummary,
+  type ReetalkDialogue,
+  type ReetalkDraft,
+  type RightsChecklist,
+  type TargetLanguage,
 } from "../shared/types";
 import { all, audit, flushNow, get, run, scalar, transaction } from "./db";
 import { projectDir, rawDraftPath, revisionsDir, writeFileAtomic } from "./paths";
 import { hashJson, nowIso, sha256Hex } from "./util";
 import { assembleLesson } from "./lesson";
+import { assembleDialogue, turnIds, validateReeTalkDialogue, validateReeTalkDraft } from "./reetalk";
 import { validateContentSemantics, validateDraftStructure, validateLessonStructure } from "./validation";
 
 export interface ProjectRow {
@@ -102,7 +109,26 @@ export function lineHash(line: DraftContent["lyrics"][number]): string {
   });
 }
 
-export function contentHash(content: DraftContent): string {
+/** Review binding for a ReeTalk turn: the same idea as `lineHash`. */
+export function turnHash(turn: ReetalkDraft["turns"][number]): string {
+  return hashJson({
+    text: turn.text,
+    translation: turn.translation,
+    tokens: turn.tokens,
+  });
+}
+
+/** Which content profile a stored project carries. */
+export function projectKind(content: ProjectContent): ContentKind {
+  return contentKindOf(content);
+}
+
+/** Parse the stored draft without assuming which profile it is. */
+export function readProjectContent(row: ProjectRow): ProjectContent {
+  return JSON.parse(row.content_json) as ProjectContent;
+}
+
+export function contentHash(content: ProjectContent): string {
   return hashJson(content);
 }
 
@@ -184,8 +210,12 @@ export function markIsReviewed(mark: LyricMark, lineSha: string, audioSha: strin
 }
 
 /** Attach the current review verdict to every mark (audio hash + line hash). */
-export function withReviewState(marks: LyricMark[], content: DraftContent, media: MediaInfo | null): LyricMark[] {
-  const lineShas = new Map(content.lyrics.map((line) => [line.id, lineHash(line)]));
+export function withReviewState(marks: LyricMark[], content: ProjectContent, media: MediaInfo | null): LyricMark[] {
+  const lineShas = new Map(
+    isReeTalkContent(content)
+      ? content.turns.map((turn) => [turn.id, turnHash(turn)])
+      : content.lyrics.map((line) => [line.id, lineHash(line)]),
+  );
   return marks.map((mark) => ({
     ...mark,
     reviewed:
@@ -197,20 +227,24 @@ export function withReviewState(marks: LyricMark[], content: DraftContent, media
   }));
 }
 
-function stateFor(content: DraftContent, marks: LyricMark[], media: MediaInfo | null, approvedAt: string | null): ProjectState {
+function stateFor(content: ProjectContent, marks: LyricMark[], media: MediaInfo | null, approvedAt: string | null): ProjectState {
   if (approvedAt) return "approved";
   if (!media) return "raw-imported";
   const timed = marks.filter((mark) => mark.startMs !== null);
   if (timed.length === 0) return "audio-selected";
+  const total = isReeTalkContent(content) ? content.turns.length : content.lyrics.length;
+  if (timed.length < total) return "sync-incomplete";
+  // ReeTalk has no separate review step: every recorded turn is export-ready.
+  if (isReeTalkContent(content)) return "review-ready";
   const reviewable = withReviewState(marks, content, media);
   const reviewed = reviewable.filter((mark) => mark.reviewed);
-  if (timed.length === content.lyrics.length && reviewed.length === content.lyrics.length) return "review-ready";
+  if (timed.length === total && reviewed.length === total) return "review-ready";
   return "sync-incomplete";
 }
 
 export function refreshState(projectId: string): ProjectState {
   const row = loadProject(projectId);
-  const content = readContent(row);
+  const content = readProjectContent(row);
   const marks = readMarks(projectId);
   const media = readMedia(projectId)?.media ?? null;
   const state = stateFor(content, marks, media, row.approved_at);
@@ -297,9 +331,28 @@ export function nextVersionCode(songId: string): number {
   return Number(max) + 1;
 }
 
-function projectIssues(row: ProjectRow, content: DraftContent, media: MediaInfo | null): { errors: Issue[]; warnings: Issue[] } {
-  const structural = validateDraftStructure(content);
-  const semantic = validateContentSemantics(content);
+function projectIssues(row: ProjectRow, content: ProjectContent, media: MediaInfo | null): { errors: Issue[]; warnings: Issue[] } {
+  if (isReeTalkContent(content)) {
+    // ReeTalk content is imported once and never edited in the studio, so the
+    // full contract validation runs here as the single source of truth.
+    const issues = validateReeTalkDraft(content);
+    const errors = issues.filter((issue) => issue.severity === "error");
+    const warnings = issues.filter((issue) => issue.severity === "warning");
+    if (!media) {
+      warnings.push({ path: "media", message: "no audio selected yet; sync and export are locked", severity: "warning" });
+    } else if (!media.coverPath) {
+      warnings.push({
+        path: "media.cover",
+        message: "a ReeTalk pack always ships a cover image; select one before exporting",
+        severity: "warning",
+      });
+    }
+    void row;
+    return { errors, warnings };
+  }
+  const song = content;
+  const structural = validateDraftStructure(song);
+  const semantic = validateContentSemantics(song);
   const all_ = [...structural, ...semantic];
   const warnings = all_.filter((issue) => issue.severity === "warning");
   const errors = all_.filter((issue) => issue.severity === "error");
@@ -337,16 +390,118 @@ function projectIssues(row: ProjectRow, content: DraftContent, media: MediaInfo 
  * complete timings, and valid lesson content.
  */
 export const EXPORT_GATES = ["audio", "duration", "timed", "timing", "content"] as const;
+/** ReeTalk adds a hard cover gate: every dialogue pack ships one. */
+export const EXPORT_GATES_REETALK = ["audio", "duration", "timed", "timing", "cover", "content"] as const;
+
+export function exportGatesFor(kind: ContentKind): readonly string[] {
+  return kind === "reetalk" ? EXPORT_GATES_REETALK : EXPORT_GATES;
+}
+
+/** Preflight for a ReeTalk dialogue: audio, cover, complete non-overlapping timings, valid content. */
+function reetalkPreflight(
+  projectId: string,
+  content: ReetalkDraft,
+  media: MediaInfo | null,
+  marks: LyricMark[],
+  issues: Issue[],
+  errors: Issue[],
+  currentContentHash: string,
+  currentTimelineHash: string,
+): PreflightReport {
+  const row = loadProject(projectId);
+  const turnCount = content.turns.length;
+  const timed = marks.filter((mark) => mark.startMs !== null);
+  const byId = new Map(marks.map((mark) => [mark.lineId, mark]));
+  const sorted = [...timed].sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0));
+  const strictlyIncreasing = sorted.every((mark, index) => index === 0 || (mark.startMs ?? 0) > (sorted[index - 1].startMs ?? 0));
+  const withinAudio = media ? sorted.every((mark) => (mark.startMs ?? 0) < media.durationMs) : false;
+  // Recorded ends must also respect the contract: end after start and no
+  // overlap with the next turn (silence between turns is fine).
+  let endsSane = true;
+  for (let index = 0; index < content.turns.length; index += 1) {
+    const mark = byId.get(content.turns[index].id);
+    if (!mark || mark.startMs === null || mark.endMs === null) continue;
+    if (mark.endMs <= mark.startMs) endsSane = false;
+    const next = content.turns[index + 1];
+    const nextStart = next ? byId.get(next.id)?.startMs ?? null : null;
+    if (nextStart !== null && mark.endMs > nextStart) endsSane = false;
+  }
+  const coverReady = !!media?.coverPath && !!media.coverSha256 && !!media.coverMimeType && !!media.coverExtension;
+
+  const gates: PreflightGate[] = [
+    {
+      key: "audio",
+      labelFa: "صوت ضبط‌شده انتخاب و کپی شده است",
+      labelEn: "Recorded audio selected and copied into the project",
+      ok: !!media,
+      detail: media ? `${media.audioFileName} · ${Math.round(media.durationMs / 1000)}s · ${media.audioSha256.slice(0, 12)}…` : "صوتی انتخاب نشده",
+    },
+    {
+      key: "duration",
+      labelFa: "مدت صوت اندازه‌گیری شده است",
+      labelEn: "Audio duration measured",
+      ok: !!media && media.durationMs > 0,
+      detail: media ? `${media.durationMs} ms` : "—",
+    },
+    {
+      key: "timed",
+      labelFa: "همهٔ نوبت‌ها زمان شروع دارند",
+      labelEn: "Every turn has a start time",
+      ok: turnCount > 0 && timed.length === turnCount,
+      detail: `${timed.length}/${turnCount}`,
+    },
+    {
+      key: "timing",
+      labelFa: "بازه‌ها صعودی، داخل صوت و بدون هم‌پوشانی‌اند",
+      labelEn: "Intervals increase, stay inside the audio and never overlap",
+      ok: timed.length === turnCount && strictlyIncreasing && withinAudio && endsSane,
+      detail: `${timed.length}/${turnCount} · ${strictlyIncreasing ? "ascending" : "out of order"}${withinAudio ? "" : " · outside audio"}${endsSane ? "" : " · overlap"}`,
+    },
+    {
+      key: "cover",
+      labelFa: "کاور انتخاب شده است (برای ری‌تاک الزامی)",
+      labelEn: "Cover selected (mandatory for ReeTalk)",
+      ok: coverReady,
+      detail: coverReady ? `${media?.coverExtension} · ${media?.coverSha256?.slice(0, 12)}…` : "کاوری انتخاب نشده",
+    },
+    {
+      key: "content",
+      labelFa: "محتوای مکالمه بدون خطاست",
+      labelEn: "Dialogue content has no blocking errors",
+      ok: errors.length === 0,
+      detail: errors.length ? `${errors.length} خطا` : "بدون خطا",
+    },
+  ];
+
+  return {
+    projectId,
+    canExport: gates
+      .filter((gate) => (EXPORT_GATES_REETALK as readonly string[]).includes(gate.key))
+      .every((gate) => gate.ok),
+    gates,
+    issues,
+    nextVersionCode: nextVersionCode(row.song_id),
+    contentHash: currentContentHash,
+    timelineHash: currentTimelineHash,
+    audioSha256: media?.audioSha256 ?? null,
+  };
+}
 
 export function preflight(projectId: string): PreflightReport {
   const row = loadProject(projectId);
-  const content = readContent(row);
+  const content = readProjectContent(row);
   const media = readMedia(projectId)?.media ?? null;
   const marks = withReviewState(readMarks(projectId), content, media);
-  const rights = readRights(row);
   const { errors, warnings } = projectIssues(row, content, media);
   const issues = [...errors, ...warnings];
+  const currentContentHash = contentHash(content);
+  const currentTimelineHash = timelineHash(marks);
 
+  if (isReeTalkContent(content)) {
+    return reetalkPreflight(projectId, content, media, marks, issues, errors, currentContentHash, currentTimelineHash);
+  }
+
+  const rights = readRights(row);
   const lineShas = new Map(content.lyrics.map((line) => [line.id, lineHash(line)]));
   const timed = marks.filter((mark) => mark.startMs !== null);
   const sorted = [...timed].sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0));
@@ -366,8 +521,6 @@ export function preflight(projectId: string): PreflightReport {
     "SELECT revision_id, content_hash, timeline_sha256, media_sha256 FROM revisions WHERE project_id = ? ORDER BY imported_at DESC LIMIT 1",
     [projectId],
   );
-  const currentContentHash = contentHash(content);
-  const currentTimelineHash = timelineHash(marks);
   const approvalMatchesRevision =
     !!row.approved_at &&
     !!revision &&
@@ -456,7 +609,8 @@ export function preflight(projectId: string): PreflightReport {
 }
 
 export function projectSummary(row: ProjectRow): ProjectSummary {
-  const content = readContent(row);
+  const content = readProjectContent(row);
+  const reetalk = isReeTalkContent(content);
   const marks = readMarks(row.project_id);
   const media = readMedia(row.project_id)?.media ?? null;
   const exports = exportSummaries(row.project_id);
@@ -466,11 +620,12 @@ export function projectSummary(row: ProjectRow): ProjectSummary {
   const latest = exports.reduce((max, item) => Math.max(max, item.versionCode), 0);
   return {
     projectId: row.project_id,
+    kind: reetalk ? "reetalk" : "song",
     songId: row.song_id,
     targetLanguage: content.targetLanguage,
     locale: content.locale,
-    title: content.title,
-    artist: content.artist ?? "",
+    title: reetalk ? content.title.fa : content.title,
+    artist: reetalk ? "" : content.artist ?? "",
     level: content.level ?? "",
     state: (row.state as ProjectState) ?? "raw-imported",
     createdAt: row.created_at,
@@ -487,9 +642,9 @@ export function projectSummary(row: ProjectRow): ProjectSummary {
           hasCover: !!media.coverPath,
         }
       : null,
-    lineCount: content.lyrics.length,
+    lineCount: reetalk ? content.turns.length : content.lyrics.length,
     timedCount: timed,
-    reviewedCount: reviewed,
+    reviewedCount: reetalk ? timed : reviewed,
     exportCount: exports.length,
     latestExportVersion: latest || null,
     issueCount: errors.length,
@@ -522,41 +677,46 @@ export function listLibrary(archiveDir: string, dataDir: string): LibraryData {
 }
 
 export interface CreateProjectInput {
-  draft: DraftContent;
+  draft: ProjectContent;
   rawPath: string;
   rawSha256: string;
 }
 
 export function createProject(input: CreateProjectInput): string {
   const { draft } = input;
-  // `projects` has no language column: a songId is pinned to one language in
+  // The `song_id` column stores the songId (song projects) or the dialogueId
+  // (ReeTalk projects): the immutable per-language identity of the project.
+  const contentId = isReeTalkContent(draft) ? draft.dialogueId : draft.songId;
+  const title = isReeTalkContent(draft) ? draft.title.fa : draft.title;
+  const artist = isReeTalkContent(draft) ? "" : draft.artist ?? "";
+  // `projects` has no language column: the id is pinned to one language in
   // `songs`, so the duplicate check must join through it.
   const existing = get<{ project_id: string }>(
     `SELECT p.project_id FROM projects p JOIN songs s ON s.song_id = p.song_id
       WHERE p.song_id = ? AND s.target_language = ?`,
-    [draft.songId, draft.targetLanguage],
+    [contentId, draft.targetLanguage],
   );
   if (existing) {
-    throw new Error(`a project for songId "${draft.songId}" (${draft.targetLanguage}) already exists; open it instead of importing twice`);
+    throw new Error(`a project for id "${contentId}" (${draft.targetLanguage}) already exists; open it instead of importing twice`);
   }
-  // A song identity is immutable once created, so reuse the row if it exists.
-  const song = get<{ song_id: string }>("SELECT song_id FROM songs WHERE song_id = ?", [draft.songId]);
+  // An identity is immutable once created, so reuse the row if it exists.
+  const song = get<{ song_id: string }>("SELECT song_id FROM songs WHERE song_id = ?", [contentId]);
   const projectId = `prj-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const timestamp = nowIso();
 
   transaction(() => {
     if (!song) {
       run("INSERT INTO songs(song_id, target_language, title, artist, created_at) VALUES (?, ?, ?, ?, ?)", [
-        draft.songId,
+        contentId,
         draft.targetLanguage,
-        draft.title,
-        draft.artist ?? "",
+        title,
+        artist,
         timestamp,
       ]);
     } else {
-      const songRow = get<{ target_language: string }>("SELECT target_language FROM songs WHERE song_id = ?", [draft.songId]);
+      const songRow = get<{ target_language: string }>("SELECT target_language FROM songs WHERE song_id = ?", [contentId]);
       if (songRow && songRow.target_language !== draft.targetLanguage) {
-        throw new Error(`songId "${draft.songId}" is already pinned to targetLanguage "${songRow.target_language}"`);
+        throw new Error(`id "${contentId}" is already pinned to targetLanguage "${songRow.target_language}"`);
       }
     }
     run(
@@ -564,7 +724,7 @@ export function createProject(input: CreateProjectInput): string {
        VALUES (?, ?, ?, ?, ?, ?, ?, 'raw-imported', ?, ?, ?)`,
       [
         projectId,
-        draft.songId,
+        contentId,
         input.rawPath,
         input.rawSha256,
         JSON.stringify(draft),
@@ -575,7 +735,7 @@ export function createProject(input: CreateProjectInput): string {
         timestamp,
       ],
     );
-    audit(projectId, "draft-imported", "operator", { songId: draft.songId, rawSha256: input.rawSha256 });
+    audit(projectId, "draft-imported", "operator", { songId: contentId, rawSha256: input.rawSha256 });
   });
   flushNow();
   return projectId;
@@ -589,7 +749,7 @@ export function saveRawSnapshot(sha256: string, bytes: Buffer): string {
 
 export function getProjectDetail(projectId: string): ProjectDetail {
   const row = loadProject(projectId);
-  const content = readContent(row);
+  const content = readProjectContent(row);
   const media = readMedia(projectId)?.media ?? null;
   const marks = withReviewState(readMarks(projectId), content, media);
   const rights = readRights(row);
@@ -622,6 +782,11 @@ function invalidateApproval(projectId: string, reason: string): void {
 
 export function saveContent(projectId: string, content: DraftContent): ProjectDetail {
   const row = loadProject(projectId);
+  if (isReeTalkContent(readProjectContent(row))) {
+    // ReeTalk content arrives validated from the content agent and is synced,
+    // not edited, in the studio — a separate project profile by design.
+    throw new Error("ReeTalk dialogue content cannot be edited in the studio; re-import the draft instead");
+  }
   const previous = readContent(row);
   if (!content || typeof content !== "object") throw new Error("content must be an object");
   if (content.songId !== previous.songId) throw new Error("songId is immutable");
@@ -763,12 +928,16 @@ export function saveMarks(
   projectId: string,
   patch: { lineId: string; startMs: number | null; endMs: number | null }[],
   media: MediaInfo | null,
-  content: DraftContent,
+  content: ProjectContent,
 ): void {
-  const validIds = new Set(content.lyrics.map((line) => line.id));
+  const validIds = new Set(isReeTalkContent(content) ? turnIds(content) : content.lyrics.map((line) => line.id));
   transaction(() => {
     for (const mark of patch) {
-      if (!validIds.has(mark.lineId)) throw new Error(`unknown lyric line "${mark.lineId}"`);
+      if (!validIds.has(mark.lineId)) {
+        throw new Error(
+          isReeTalkContent(content) ? `unknown dialogue turn "${mark.lineId}"` : `unknown lyric line "${mark.lineId}"`,
+        );
+      }
       if (mark.startMs !== null && (!Number.isInteger(mark.startMs) || mark.startMs < 0)) {
         throw new Error(`invalid startMs for ${mark.lineId}`);
       }
@@ -815,12 +984,13 @@ export function saveMarks(
  */
 export function distributeMarks(projectId: string): ProjectDetail {
   const row = loadProject(projectId);
-  const content = readContent(row);
+  const content = readProjectContent(row);
   const media = readMedia(projectId)?.media ?? null;
   if (!media || media.durationMs <= 0) throw new Error("select the audio first: distribution needs its duration");
-  if (content.lyrics.length === 0) throw new Error("this lesson has no lyric lines");
-  const step = media.durationMs / content.lyrics.length;
-  const patch = content.lyrics.map((line, index) => ({
+  const targets = isReeTalkContent(content) ? content.turns : content.lyrics;
+  if (targets.length === 0) throw new Error("this project has no lines to time");
+  const step = media.durationMs / targets.length;
+  const patch = targets.map((line, index) => ({
     lineId: line.id,
     startMs: Math.min(media.durationMs - 1, Math.round(step * index)),
     endMs: null,
@@ -832,10 +1002,14 @@ export function distributeMarks(projectId: string): ProjectDetail {
 
 export function setReviewed(projectId: string, lineIds: string[], reviewed: boolean): ProjectDetail {
   const row = loadProject(projectId);
-  const content = readContent(row);
+  const content = readProjectContent(row);
   const media = readMedia(projectId)?.media ?? null;
   if (reviewed && !media) throw new Error("select the audio before reviewing lines");
-  const lineShas = new Map(content.lyrics.map((line) => [line.id, lineHash(line)]));
+  const lineShas = new Map(
+    isReeTalkContent(content)
+      ? content.turns.map((turn) => [turn.id, turnHash(turn)])
+      : content.lyrics.map((line) => [line.id, lineHash(line)]),
+  );
   transaction(() => {
     for (const lineId of lineIds) {
       const mark = get<{ start_ms: number | null }>("SELECT start_ms FROM lyric_marks WHERE project_id = ? AND line_id = ?", [
@@ -884,7 +1058,7 @@ export function approveProject(projectId: string, approver: string, note: string
   }
   if (!approver.trim()) throw new Error("approver name is required");
   const row = loadProject(projectId);
-  const content = readContent(row);
+  const content = readProjectContent(row);
   const marks = readMarks(projectId);
   const media = readMedia(projectId)?.media ?? null;
   const rights = readRights(row);
@@ -982,7 +1156,9 @@ export function latestRevision(projectId: string) {
 
 export function buildLessonForExport(projectId: string): { lesson: Lesson; media: MediaInfo; content: DraftContent } {
   const row = loadProject(projectId);
-  const content = readContent(row);
+  const stored = readProjectContent(row);
+  if (isReeTalkContent(stored)) throw new Error("this project is a ReeTalk dialogue: export it as a dialogue pack");
+  const content = stored;
   const media = readMedia(projectId)?.media ?? null;
   if (!media) throw new Error("select audio from the system before exporting");
   const marks = readMarks(projectId);
@@ -997,6 +1173,35 @@ export function buildLessonForExport(projectId: string): { lesson: Lesson; media
     );
   }
   return { lesson, media, content };
+}
+
+/**
+ * Build the published `dialogue.json` for a ReeTalk project. The version code
+ * is decided before assembly because it is embedded in the JSON itself.
+ */
+export function buildReeTalkForExport(
+  projectId: string,
+  contentVersionCode: number,
+): { dialogue: ReetalkDialogue; media: MediaInfo; draft: ReetalkDraft } {
+  const row = loadProject(projectId);
+  const content = readProjectContent(row);
+  if (!isReeTalkContent(content)) throw new Error("this project is a song lesson, not a ReeTalk dialogue");
+  const media = readMedia(projectId)?.media ?? null;
+  if (!media) throw new Error("select the recorded audio from the system before exporting");
+  const marks = readMarks(projectId);
+  const dialogue = assembleDialogue({ draft: content, marks, media, contentVersionCode });
+  const errors = validateReeTalkDialogue(dialogue, media.durationMs, media.audioSha256).filter(
+    (issue) => issue.severity === "error",
+  );
+  if (errors.length) {
+    throw new Error(
+      `dialogue.json failed validation: ${errors
+        .map((issue) => `${issue.path} ${issue.message}`)
+        .slice(0, 5)
+        .join("; ")}`,
+    );
+  }
+  return { dialogue, media, draft: content };
 }
 
 export function readPayload(exportId: string): unknown {

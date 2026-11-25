@@ -15,6 +15,16 @@ applied in memory in `src/main/validation.ts`). Turkish projects are importable
 and exportable today and are flagged in the UI so they are only published to an
 Android build that accepts `tr`.
 
+Alongside song lessons the studio imports **ReeTalk** dialogues
+(`*.reetalkdraft.json`, `contentType: "reetalk"`): a two-speaker conversation
+with its learning blocks, timed against the operator's own recorded audio. A
+ReeTalk pack is deliberately different — exactly `dialogue.json + audio + cover`
+(the cover is mandatory), a `manifestVersion: 2` payload keyed by `dialogueId`,
+and no-overlap timing rules where a recorded turn end is kept as a silence gap
+and a missing end falls back to the next turn's start (last turn: the audio
+duration). ReeTalk content is imported once and never edited in the studio; the
+tabs reduce to overview/audio, timeline and export.
+
 The UI is Persian-first with a full English switch, RTL, blue/white, ships
 **dark, light and follow-system themes**, and uses
 the repository `logo.png` as window icon, sidebar mark, splash logo and
@@ -44,10 +54,13 @@ playable is produced here:
 2. **Audio** — the operator picks a file from the OS. It is copied into the
    project folder, hashed (SHA-256), measured (duration, codec, bytes) and
    rendered as a waveform. Replacing it invalidates every mark and the approval.
-3. **Timeline** — mark/undo/redo, numeric edit, click-to-seek, `M` capture,
-   `Space` play/pause, `J`/`K` line navigation, `A`/`B` loop, zoom, plus a
-   **distribute evenly** action for long songs (46 lines in one click, then
-   adjust the ones that matter).
+3. **Timeline** — mark/undo/redo, numeric edit, click-to-seek, `M` capture of a
+   line start and `E` capture of a line end, `Space` play/pause, `J`/`K` line
+   navigation, `A`/`B` loop, zoom, plus a **distribute evenly** action for long
+   songs (46 lines in one click, then adjust the ones that matter). A line
+   exported without a recorded end gets the next line's start (last line: the
+   audio duration), so timing only the starts is enough — recorded ends stay
+   untouched and are kept as silence gaps.
 4. **Export** — one button, no password anywhere. The plain ZIP (`lesson.json`
    + audio + optional cover) is sealed with AES-256-GCM under the fixed
    distribution key `enc-main` into `v000001-<sha256>.rdpack`, and a signed

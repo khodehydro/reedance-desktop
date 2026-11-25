@@ -299,6 +299,182 @@ export interface DraftContent {
   idAliases?: IdAlias[];
 }
 
+/* ------------------------------------------------------------------ */
+/* ReeTalk — timed two-speaker dialogue packages (manifest v2).        */
+/* Contract: reedance-android docs/interop/REETALK_PACKAGE_FA.md.      */
+/* ------------------------------------------------------------------ */
+
+/** Localized text carried by every ReeTalk content field. */
+export interface ReetalkLocalized {
+  fa: string;
+  en: string;
+}
+
+export interface ReetalkSpeaker {
+  id: string;
+  name: string;
+  gender: "woman" | "man";
+}
+
+export interface ReetalkToken {
+  surface: string;
+  gloss: ReetalkLocalized;
+}
+
+/** One dialogue turn as authored (no timings). */
+export interface ReetalkTurn {
+  id: string;
+  speakerId: string;
+  text: string;
+  translation: ReetalkLocalized;
+  tokens: ReetalkToken[];
+}
+
+/** A published turn carries its recorded interval against the final audio. */
+export type ReetalkTimedTurn = ReetalkTurn & { startMs: number; endMs: number };
+
+export interface ReetalkWord {
+  id: string;
+  text: string;
+  pronunciation: { faReading: string; ipa: string };
+  meaning: ReetalkLocalized;
+  example: { text: string; translation: ReetalkLocalized };
+}
+
+/** A table cell is target-language text ({text}) or a localized pair ({fa,en}). */
+export type ReetalkTableCell = { text: string } | { fa: string; en: string };
+
+export interface ReetalkTable {
+  title: ReetalkLocalized;
+  columns: ReetalkLocalized[];
+  rows: ReetalkTableCell[][];
+}
+
+export interface ReetalkGrammar {
+  id: string;
+  title: ReetalkLocalized;
+  explanation: ReetalkLocalized;
+  example: { text: string; translation: ReetalkLocalized };
+  takeaway: ReetalkLocalized;
+  tables: ReetalkTable[];
+}
+
+export interface ReetalkPhrase {
+  id: string;
+  text: string;
+  pronunciation: { faReading: string; ipa: string };
+  meaning: ReetalkLocalized;
+  context: ReetalkLocalized;
+  example: { text: string; translation: ReetalkLocalized };
+}
+
+export interface ReetalkOption {
+  id: string;
+  text: ReetalkLocalized;
+}
+
+export interface ReetalkQuestion {
+  id: string;
+  stage: "gist" | "detail" | "review";
+  /** v1 supports multiple choice only. */
+  type: "multiple_choice";
+  prompt: ReetalkLocalized;
+  options: ReetalkOption[];
+  correctOptionId: string;
+  explanation: ReetalkLocalized;
+  evidenceTurnIds: string[];
+}
+
+export interface ReetalkLearning {
+  words: ReetalkWord[];
+  grammar: ReetalkGrammar[];
+  phrases: ReetalkPhrase[];
+  questions: ReetalkQuestion[];
+}
+
+/** Content-only `.reetalkdraft.json` (draftSchemaVersion 1). No media, no timings. */
+export interface ReetalkDraft {
+  draftSchemaVersion: 1;
+  contentType: "reetalk";
+  dialogueId: string;
+  categoryId: string;
+  targetLanguage: TargetLanguage;
+  locale: string;
+  level: Level;
+  title: ReetalkLocalized;
+  objective: ReetalkLocalized;
+  /** Exactly two speakers. */
+  speakers: ReetalkSpeaker[];
+  /** 10–120 turns, at least 5 per speaker, array order is conversation order. */
+  turns: ReetalkTurn[];
+  learning: ReetalkLearning;
+}
+
+export interface ReetalkMediaAudio {
+  path: "audio.mp3" | "audio.m4a" | "audio.wav";
+  mimeType: "audio/mpeg" | "audio/mp4" | "audio/wav";
+  durationMs: number;
+  sha256: string;
+}
+
+export interface ReetalkMediaCover {
+  path: "cover.jpg" | "cover.png" | "cover.webp";
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  sha256: string;
+}
+
+/** Published `dialogue.json` inside a ReeTalk `.rdpack`. */
+export interface ReetalkDialogue {
+  contentType: "reetalk";
+  schemaVersion: 1;
+  contentVersionCode: number;
+  dialogueId: string;
+  categoryId: string;
+  targetLanguage: TargetLanguage;
+  locale: string;
+  level: Level;
+  title: ReetalkLocalized;
+  objective: ReetalkLocalized;
+  speakers: ReetalkSpeaker[];
+  turns: ReetalkTimedTurn[];
+  learning: ReetalkLearning;
+  media: { audio: ReetalkMediaAudio; cover: ReetalkMediaCover };
+}
+
+/** Signed `latest.json` payload for ReeTalk (manifestVersion 2). */
+export interface ReetalkManifestPayload {
+  manifestVersion: 2;
+  contentType: "reetalk";
+  dialogueId: string;
+  targetLanguage: TargetLanguage;
+  dialogueSchemaVersion: 1;
+  contentVersionCode: number;
+  package: {
+    fileName: string;
+    sizeBytes: number;
+    sha256: string;
+    encryptionKeyId: string;
+  };
+}
+
+/** Either the song lesson draft or a ReeTalk dialogue draft. */
+export type ProjectContent = DraftContent | ReetalkDraft;
+
+export function isReeTalkContent(value: unknown): value is ReetalkDraft {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as { contentType?: unknown }).contentType === "reetalk" &&
+    (value as { draftSchemaVersion?: unknown }).draftSchemaVersion === 1
+  );
+}
+
+export type ContentKind = "song" | "reetalk";
+
+export function contentKindOf(value: unknown): ContentKind {
+  return isReeTalkContent(value) ? "reetalk" : "song";
+}
+
 export interface MediaInfo {
   audioPath: string;
   audioFileName: string;
@@ -391,6 +567,9 @@ export interface ManifestEnvelope {
   signature: string;
 }
 
+/** Either the song payload (v1) or the ReeTalk payload (v2) inside an envelope. */
+export type SignedPayload = ManifestPayload | ReetalkManifestPayload;
+
 /** Operator rights checklist recorded in the local project (never in the pack). */
 export interface RightsChecklist {
   audioRights: boolean;
@@ -463,6 +642,8 @@ export interface ExportSummary {
 
 export interface ProjectSummary {
   projectId: string;
+  /** Content profile: a song lesson or a ReeTalk dialogue. */
+  kind: ContentKind;
   songId: string;
   targetLanguage: TargetLanguage;
   locale: string;
@@ -512,7 +693,8 @@ export interface PreflightReport {
 
 export interface ProjectDetail {
   summary: ProjectSummary;
-  content: DraftContent;
+  /** The stored draft: a song lesson or a ReeTalk dialogue (see `summary.kind`). */
+  content: ProjectContent;
   marks: LyricMark[];
   media: MediaInfo | null;
   rights: RightsChecklist;
