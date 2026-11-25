@@ -2,13 +2,13 @@
 
 ## نصب
 
-1. فایل `Reedance-Studio-Setup-1.0.6-x64.exe` را اجرا کنید.
+1. فایل `Reedance-Studio-Setup-1.0.7-x64.exe` را اجرا کنید.
 2. چون فایل با گواهی تجاری امضا نشده است، ویندوز SmartScreen هشدار می‌دهد: **More info → Run anyway**.
 3. مسیر نصب را انتخاب کنید (نصب برای کاربر جاری، بدون نیاز به دسترسی مدیر).
 4. میان‌بر روی دسکتاپ و منوی استارت ساخته می‌شود.
 
-نسخهٔ فایل: `1.0.6` — SHA-256:
-`a6b7d757d847129f7b1b7171383b2826593fc697c7dc77f2bf627c88b245bf18`
+نسخهٔ فایل: `1.0.7` — SHA-256:
+`11c706f680662b77d2642893ad85ac3d7ad31550bcbd115da84d54ebce9585ec`
 
 ## زبان‌ها
 
@@ -70,7 +70,7 @@
 
 # Reedance Studio — user guide (English)
 
-Install `Reedance-Studio-Setup-1.0.6-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
+Install `Reedance-Studio-Setup-1.0.7-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
 
 The pipeline is deliberately linear: import a content-only `.rddraft.json`, pick the audio from your machine, mark every lyric line on the waveform, then press **Get the output file**. Keys are generated and protected by the app; there is no key picker and no approval ceremony. Export is only blocked by a missing audio file, an unmeasured duration or untimed lines. Replacing the audio clears the marks so stale timings can never be exported. Every byte inside the pack (lesson.json, song audio, cover, story audio) is written with maximum-level DEFLATE, so the `.rdpack` is tighter than a standard ZIP of the same content. Theme: ☾/☀ in the top bar (dark, light, system).
 

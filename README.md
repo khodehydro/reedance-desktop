@@ -34,11 +34,11 @@ installer icon. The splash screen is signed "HYDRO team".
 
 | file | size | SHA-256 |
 | --- | --- | --- |
-| `Reedance-Studio-Setup-1.0.6-x64.exe` | 135,173,110 bytes | `a6b7d757d847129f7b1b7171383b2826593fc697c7dc77f2bf627c88b245bf18` |
+| `Reedance-Studio-Setup-1.0.7-x64.exe` | 135,182,983 bytes | `11c706f680662b77d2642893ad85ac3d7ad31550bcbd115da84d54ebce9585ec` |
 
 The installer sits at the repository root of this workspace. A copy of the same
 build is attached to the GitHub release
-[`build-5`](https://github.com/khodehydro/reedance-desktop/releases/tag/build-9).
+[`build-20`](https://github.com/khodehydro/reedance-desktop/releases/tag/build-20).
 It is unsigned, so Windows SmartScreen asks for **More info → Run anyway**.
 See [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for the Persian walkthrough, the
 English summary and the timeline shortcuts.
