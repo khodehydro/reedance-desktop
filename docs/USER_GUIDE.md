@@ -2,13 +2,13 @@
 
 ## نصب
 
-1. فایل `Reedance-Studio-Setup-1.0.9-x64.exe` را اجرا کنید.
+1. فایل `Reedance-Studio-Setup-1.0.10-x64.exe` را اجرا کنید.
 2. چون فایل با گواهی تجاری امضا نشده است، ویندوز SmartScreen هشدار می‌دهد: **More info → Run anyway**.
 3. مسیر نصب را انتخاب کنید (نصب برای کاربر جاری، بدون نیاز به دسترسی مدیر).
 4. میان‌بر روی دسکتاپ و منوی استارت ساخته می‌شود.
 
-نسخهٔ فایل: `1.0.9` — SHA-256:
-`711433ac87f66981f402dcdb523cb3b6d926f2182d8574cc766e057146cfeee5`
+نسخهٔ فایل: `1.0.10` — SHA-256:
+`170d145cc13f428a3310ae15696fb8f8c2f07cd6a42fd16194dba7c02186ca08`
 
 ## زبان‌ها
 
@@ -24,6 +24,16 @@
 | ۴. خروجی | تب «خروجی» → دکمهٔ **دریافت فایل خروجی** | ساخت `.rdpack` (کلید `enc-main`) + `latest.json` امضاشده؛ بدون هیچ رمزی؛ همه‌ی داخلی بسته با حداکثر سطح DEFLATE فشرده می‌شود |
 
 سینک لیریک (از نسخهٔ 1.0.9): محور تایم‌لاین **از چپ به راست** است و waveform دقیقاً با زمان واقعی فایل هم‌تراز است — طول صوت را خودِ دیکدر صوتی اندازه می‌گیرد و اگر با سربرگ فایل (مثلاً MP3های VBR یا دارای کاور بزرگ) بیش از ۲۵۰ میلی‌ثانیه اختلاف داشت، مقدار دیکدر جایگزین می‌شود. فقط یک خط نارنجی (**نوک پخش**) وجود دارد: با گوش دادن پخش کنید و در لحظهٔ درست **ثبت شروع سطر (M)** را بزنید؛ سطر بعدی خودکار انتخاب می‌شود. **ثبت پایان سطر (E)** پایانِ سطرِ در حال پخش را ثبت می‌کند. این دو دکمهٔ بزرگ در «میز ثبت» زیر waveform کنار متن و ترجمهٔ سطر انتخابی قرار دارند. در جدول سطرها هر سطر دو ستون **شروع** و **پایان** دارد: ⏱ همان زمان را از نوک پخش ثبت می‌کند، می‌توانید زمان را تایپ کنید (Enter) و ▶ صدا را به آن نقطه می‌برد. پایانی که ثبت نکرده‌اید کم‌رنگ و ایتالیک نمایش داده می‌شود: این همان مقداری است که در خروجی پر می‌شود (شروع سطر بعدی، و برای آخرین سطر = پایان صوت). مشکلات (بدون شروع، ترتیب اشتباه، بیرون از صوت، هم‌پوشانی در ReeTalk) کنار همان سطر و روی waveform قرمز نشان داده می‌شوند و قبل از ذخیره جلویشان گرفته می‌شود. سرعت پخش 0.5× تا 1× برای سینک دقیق، بزرگ‌نمایی با دکمه‌ها یا `Ctrl` + چرخ ماوس (حول نشانگر ماوس)، و حلقهٔ A/B برای تکرار یک بازه در دسترس است.
+
+**تایم‌لاین کلیپی (از نسخهٔ 1.0.10، مثل CapCut/InShot)** — هم برای آهنگ و هم برای ReeTalk:
+- سطرها در ابتدا روی تایم‌لاین نیستند؛ در فهرست سطرها (سمت راست) با خط‌چین و فیلتر «روی تایم‌لاین نیست» دیده می‌شوند. هر سطر را با ماوس بگیرید (⠿) و روی نوار کلیپ زیر waveform رها کنید؛ پیش‌نمایش آبی محل دقیق را نشان می‌دهد و اگر جا نباشد قرمز می‌شود. `Esc` کشیدن را لغو می‌کند.
+- سطرِ رهاشده **انتخاب** می‌شود (کلیپ زرد): دستگیرهٔ چپ = شروع، دستگیرهٔ راست = پایان، و کشیدن بدنهٔ کلیپ آن را با همان طول جابه‌جا می‌کند. هنگام کشیدن، زمان دقیق بالای کلیپ نمایش داده می‌شود.
+- با رها کردن سطر بعدی، سطر قبلی **قفل** می‌شود (کم‌رنگ، بدون دستگیره)؛ کلیک یا کشیدن روی آن فقط نوک پخش را جابه‌جا می‌کند و زمانش هرگز عوض نمی‌شود. برای ویرایش دوباره، سطر را در فهرست انتخاب کنید.
+- کلیپ هیچ‌وقت از روی همسایه‌هایش رد نمی‌شود. لبه‌ها به نوک پخش و لبهٔ کلیپ‌های دیگر می‌چسبند (🧲؛ نگه‌داشتن `Alt` موقتاً برعکسش می‌کند).
+- پنل بازرس: ±۱۰ و ±۱۰۰ میلی‌ثانیه برای هر لبه، تایپ زمان، ⏱ از نوک پخش، «برداشتن از تایم‌لاین» (`Delete`). همهٔ تغییرها با `Ctrl+Z` / `Ctrl+Shift+Z` برمی‌گردند.
+- بزرگ‌نمایی تا ۴۰۰۰ پیکسل در ثانیه (هر پیکسل ربع میلی‌ثانیه) بدون به‌هم‌ریختگی: فقط بخش دیده‌شده رسم می‌شود. نوار کوچک پایین (نمای کل فایل) برای پرش سریع است.
+
+**کاور:** فایل کاور بدون هیچ تغییر اندازه یا فشرده‌سازی، بایت‌به‌بایت در پکیج قرار می‌گیرد. زیر پیش‌نمایش، ابعاد واقعی (مثلاً 1600×1600)، فرمت و حجم نمایش داده می‌شود؛ اگر تصویر منبع کمتر از ۵۱۲ پیکسل باشد هشدار می‌دهد (۱۰۲۴ پیکسل یا بیشتر پیشنهاد می‌شود). حداکثر ابعاد: آهنگ 8192، ReeTalk 4096 پیکسل در هر ضلع.
 
 ## شبیه‌ساز اندروید (پیش از خروجی)
 
@@ -73,13 +83,13 @@
 
 ## میان‌برهای تایم‌لاین
 
-`Space` پخش/توقف · `M` ثبت زمان **شروع** سطر انتخابی و رفتن به سطر بعد · `E` ثبت زمان **پایان** سطرِ در حال پخش · `P` پخش همان سطر · `←/→` جابه‌جایی ۱۰۰ میلی‌ثانیه (با `Shift` یک ثانیه) · `J/K` یا `↑/↓` سطر قبل/بعد · `Ctrl` + چرخ ماوس برای بزرگ‌نمایی، چرخ ساده برای حرکت افقی.
+`Space` پخش/توقف · `M` گذاشتن **شروع** سطر انتخابی روی نوک پخش و رفتن به سطر بعد · `E` ثبت زمان **پایان** · `P` پخش همان سطر · `Delete` برداشتن سطر از تایم‌لاین · `Ctrl+Z` / `Ctrl+Shift+Z` واگرد/ازنو · `+` / `-` بزرگ‌نمایی، `\` نمایش کل فایل · `←/→` جابه‌جایی نوک پخش ۱۰۰ میلی‌ثانیه (با `Shift` یک ثانیه) · `J/K` یا `↑/↓` سطر قبل/بعد · `Ctrl` + چرخ ماوس برای بزرگ‌نمایی حول ماوس، چرخ ساده برای حرکت افقی.
 
 ---
 
 # Reedance Studio — user guide (English)
 
-Install `Reedance-Studio-Setup-1.0.9-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
+Install `Reedance-Studio-Setup-1.0.10-x64.exe`, accept the SmartScreen warning (**More info → Run anyway**) because the build is not code-signed, and launch *Reedance Studio*.
 
 The pipeline is deliberately linear: import a content-only `.rddraft.json`, pick the audio from your machine, mark every lyric line on the waveform, then press **Get the output file**. Keys are generated and protected by the app; there is no key picker and no approval ceremony. Export is only blocked by a missing audio file, an unmeasured duration or untimed lines. Replacing the audio clears the marks so stale timings can never be exported. Every byte inside the pack (lesson.json, song audio, cover, story audio) is written with maximum-level DEFLATE, so the `.rdpack` is tighter than a standard ZIP of the same content. Theme: ☾/☀ in the top bar (dark, light, system).
 
@@ -98,6 +108,10 @@ No password at all: packs are sealed with the fixed `enc-main` key and the Andro
 Keyboard: `Space` play/pause, `M` capture the selected line's start and advance, `E` capture the end of the line being played, `P` play the selected line, `←/→` ±100 ms (`Shift` ±1 s), `J/K` or `↑/↓` previous/next line, `Ctrl` + wheel zoom.
 
 **Lyric sync (1.0.9).** The axis runs **left to right** and the waveform is mapped to the real audio time: the decoder measures the duration and replaces the container value when they differ by more than 250 ms (VBR MP3s, big embedded cover art). There is a single orange **playhead**: listen, and press **Capture line start (M)** at the right moment — the next line is selected automatically. **Capture line end (E)** stamps the end of the line being played. Both big buttons live in the capture dock under the waveform next to the selected line's text. Each table row has **Start** and **End** cells: ⏱ stamps from the playhead, typing a time + Enter sets it, ▶ seeks there. An end you did not record is shown faded/italic — that is exactly what the export fills in (next start; last line: audio end). Problems (missing start, out of order, outside the audio, ReeTalk overlap) are flagged on the row and on the waveform and blocked before saving. Use 0.5×–1× speed for precise syncing, zoom with the buttons or `Ctrl` + wheel (anchored on the cursor), and the A/B loop to repeat a span.
+
+**Clip timeline (1.0.10, CapCut/InShot style)** — songs and ReeTalk alike. Lines start *off* the timeline (dashed in the line list, filter "not on timeline"). Grab a line (⠿) and drop it on the clip track under the waveform; a blue ghost previews the exact spot and turns red when there is no room (`Esc` cancels). The dropped line becomes the **selected** clip (yellow): left handle = start, right handle = end, drag the body to move it with the same length, with a live time readout. Dropping the next line **locks** the previous one (faded, no handles): clicking or dragging over it only moves the playhead, never its timing — reselect it in the list to edit it again. Clips never cross their neighbours; edges snap to the playhead and other clip edges (🧲, hold `Alt` to invert). The inspector offers ±10/±100 ms nudges per edge, typed times, ⏱ from the playhead and *Remove from timeline* (`Delete`); everything is undoable (`Ctrl+Z` / `Ctrl+Shift+Z`). Zoom goes to 4000 px/s (0.25 ms per pixel) without breaking — only the visible span is drawn — and the mini-map under the track jumps anywhere in the file.
+
+**Cover.** The cover file is shipped byte-for-byte — no resize, no recompression. The preview shows its real resolution, format and size, and warns when the source is under 512 px (1024 px or more recommended). Maximum side: 8192 px for songs, 4096 px for ReeTalk (the Android installer limits).
 
 **Android simulator.** The **📱 Android simulator** tab replays the project the way the phone shows it, using the exact export timings: the song player (cover, auto-scrolling active lyric, original / sentence / word-by-word modes, per-line ▶) or the ReeTalk chat (cover before playback, bubbles revealed at each turn start, speaker modes both / mute / listen / role-play, list or last-two view, hide-all, translations, text size and paper colours, plus the words / grammar / phrases / questions pages). A side panel lists export readiness and timing problems with a jump to the timeline.
 

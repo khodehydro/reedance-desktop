@@ -19,7 +19,7 @@ Alongside song lessons the studio imports **ReeTalk** dialogues
 (`*.reetalkdraft.json`, `contentType: "reetalk"`): a two-speaker conversation
 with its learning blocks, timed against the operator's own recorded audio. A
 ReeTalk pack is deliberately different — exactly `dialogue.json + audio + cover`
-(the cover is mandatory), a `manifestVersion: 2` payload keyed by `dialogueId`,
+(the cover is mandatory and, like every cover, ships byte-for-byte — never resized or recompressed), a `manifestVersion: 2` payload keyed by `dialogueId`,
 and no-overlap timing rules where a recorded turn end is kept as a silence gap
 and a missing end falls back to the next turn's start (last turn: the audio
 duration). ReeTalk content is imported once and never edited in the studio; the
@@ -38,11 +38,11 @@ installer icon. The splash screen is signed "HYDRO team".
 
 | file | size | SHA-256 |
 | --- | --- | --- |
-| `Reedance-Studio-Setup-1.0.9-x64.exe` | 135,200,831 bytes | `711433ac87f66981f402dcdb523cb3b6d926f2182d8574cc766e057146cfeee5` |
+| `Reedance-Studio-Setup-1.0.10-x64.exe` | 135,208,852 bytes | `170d145cc13f428a3310ae15696fb8f8c2f07cd6a42fd16194dba7c02186ca08` |
 
 The installer sits at the repository root of this workspace. A copy of the same
 build is attached to the GitHub release
-[`build-24`](https://github.com/khodehydro/reedance-desktop/releases/tag/build-24).
+[`build-26`](https://github.com/khodehydro/reedance-desktop/releases/tag/build-26).
 It is unsigned, so Windows SmartScreen asks for **More info → Run anyway**.
 See [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for the Persian walkthrough, the
 English summary and the timeline shortcuts.
@@ -58,7 +58,10 @@ playable is produced here:
 2. **Audio** — the operator picks a file from the OS. It is copied into the
    project folder, hashed (SHA-256), measured (duration, codec, bytes) and
    rendered as a waveform. Replacing it invalidates every mark and the approval.
-3. **Timeline** — mark/undo/redo, numeric edit, click-to-seek, `M` capture of a
+3. **Timeline** — CapCut-style clip track: drag each line from the list onto the
+   timeline, trim the selected clip with start/end handles or move it (previous
+   clips are locked), snapping, deep zoom (0.25 ms/px) with a mini-map;
+   mark/undo/redo, numeric edit, click-to-seek, `M` capture of a
    line start and `E` capture of a line end, `Space` play/pause, `J`/`K` line
    navigation, `A`/`B` loop, zoom, plus a **distribute evenly** action for long
    songs (46 lines in one click, then adjust the ones that matter). A line
