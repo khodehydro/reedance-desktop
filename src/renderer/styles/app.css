@@ -156,12 +156,50 @@
 
 .cover-preview,
 .cover-placeholder {
-  width: 150px;
-  height: 150px;
+  width: 180px;
+  height: 180px;
   border-radius: 14px;
   object-fit: cover;
   border: 1px solid var(--line-strong);
   background: repeating-linear-gradient(45deg, rgba(95, 176, 255, 0.08) 0 8px, transparent 8px 16px);
+}
+
+.cover-preview {
+  image-rendering: auto;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.cover-facts {
+  display: flex;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-soft);
+}
+
+.cover-facts span {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface-low);
+  border: 1px solid var(--line);
+}
+
+.cover-facts.is-low span:first-child {
+  color: #ffb36b;
+  border-color: rgba(255, 179, 107, 0.5);
+}
+
+.cover-note {
+  max-width: 220px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--muted);
+}
+
+.cover-note.is-low {
+  color: #ffb36b;
 }
 
 .cover-placeholder {

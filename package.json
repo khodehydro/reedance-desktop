@@ -1,6 +1,6 @@
 {
   "name": "reedance-studio",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "private": true,
   "description": "Reedance Content Studio - Electron desktop app to import AI drafts, sync lyrics on a waveform timeline, review, and export encrypted .rdpack bundles.",
   "author": {

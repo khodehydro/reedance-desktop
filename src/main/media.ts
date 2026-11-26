@@ -380,9 +380,82 @@ export function importStoryAudio(projectId: string, sourcePath: string, previous
   };
 }
 
-export function importCover(projectId: string, sourcePath: string, media: MediaInfo): MediaInfo {
+/**
+ * Pixel size from the image header (PNG IHDR, JPEG SOFn, WebP VP8/VP8L/VP8X).
+ * Header-only: the image is never decoded or re-encoded — the cover ships
+ * byte-for-byte as the operator selected it.
+ */
+export function coverDimensions(buffer: Buffer): { width: number; height: number } | null {
+  try {
+    if (buffer.length >= 24 && buffer[0] === 0x89 && buffer.subarray(12, 16).toString("ascii") === "IHDR") {
+      return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+    }
+    if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+      let offset = 2;
+      while (offset + 9 < buffer.length) {
+        if (buffer[offset] !== 0xff) {
+          offset += 1;
+          continue;
+        }
+        const marker = buffer[offset + 1];
+        if (marker === 0xff) {
+          offset += 1;
+          continue;
+        }
+        if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+          offset += 2;
+          continue;
+        }
+        const length = buffer.readUInt16BE(offset + 2);
+        // SOF0..SOF15 except DHT (C4), JPG (C8) and DAC (CC).
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+          return { width: buffer.readUInt16BE(offset + 7), height: buffer.readUInt16BE(offset + 5) };
+        }
+        if (length < 2) return null;
+        offset += 2 + length;
+      }
+      return null;
+    }
+    if (buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") {
+      const chunk = buffer.subarray(12, 16).toString("ascii");
+      if (chunk === "VP8X" && buffer.length >= 30) {
+        return { width: 1 + buffer.readUIntLE(24, 3), height: 1 + buffer.readUIntLE(27, 3) };
+      }
+      if (chunk === "VP8L" && buffer.length >= 25 && buffer[20] === 0x2f) {
+        const bits = buffer.readUInt32LE(21);
+        return { width: 1 + (bits & 0x3fff), height: 1 + ((bits >> 14) & 0x3fff) };
+      }
+      if (chunk === "VP8 " && buffer.length >= 30) {
+        return { width: buffer.readUInt16LE(26) & 0x3fff, height: buffer.readUInt16LE(28) & 0x3fff };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** What the Android installers accept (PackInstaller / ReeTalkInstaller). */
+export const COVER_LIMITS = {
+  song: { maxSide: 8192, maxPixels: 32_000_000 },
+  reetalk: { maxSide: 4096, maxPixels: 4096 * 4096 },
+} as const;
+
+export function importCover(
+  projectId: string,
+  sourcePath: string,
+  media: MediaInfo,
+  limits: { maxSide: number; maxPixels: number } = COVER_LIMITS.song,
+): MediaInfo {
   const buffer = readFileLimited(sourcePath, COVER_MAX_BYTES);
   const extension = sniffCover(buffer);
+  const size = coverDimensions(buffer);
+  if (size && (size.width < 1 || size.height < 1 || size.width > limits.maxSide || size.height > limits.maxSide || size.width * size.height > limits.maxPixels)) {
+    throw new Error(
+      `cover is ${size.width}×${size.height} px; the Android app accepts at most ${limits.maxSide}×${limits.maxSide} px. ` +
+        `کاور ${size.width}×${size.height} پیکسل است؛ اپ اندروید حداکثر ${limits.maxSide}×${limits.maxSide} پیکسل را می‌پذیرد.`,
+    );
+  }
   const sha = hashFile(buffer);
   const dir = projectDir(projectId);
   const target = assertInside(dir, path.join(dir, `cover.${extension}`));

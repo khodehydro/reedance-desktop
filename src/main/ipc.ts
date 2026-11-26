@@ -10,14 +10,14 @@ import type {
   StatsScope,
   TargetLanguage,
 } from "../shared/types";
-import { SUPPORTED_LANGUAGES, isTargetLanguage } from "../shared/types";
+import { SUPPORTED_LANGUAGES, isReeTalkContent, isTargetLanguage } from "../shared/types";
 import { CH } from "../shared/ipc";
 import { all, audit, flushNow } from "./db";
 import { rescanArchive, stageExport } from "./archive";
 import { runExport, runQuickExport, verifyExportReport } from "./exporter";
 import { createEmptyDraft, importDraftFile } from "./import";
 import { ensureStudioKeys } from "./keys";
-import { importAudio, importCover, importStoryAudio, reconcileDecodedDuration } from "./media";
+import { COVER_LIMITS, importAudio, importCover, importStoryAudio, reconcileDecodedDuration } from "./media";
 import { publishExport } from "./publication";
 import {
   approveProject,
@@ -266,7 +266,10 @@ export function registerIpc(): void {
     if (!file) return null;
     const media = readMedia(project)?.media;
     if (!media) throw new Error("select the audio before the cover");
-    const updated = importCover(project, file, media);
+    // The original file is copied byte-for-byte (no resize, no re-encode);
+    // only Android's pixel limits for this content kind are enforced.
+    const limits = isReeTalkContent(readProjectContent(loadProject(project))) ? COVER_LIMITS.reetalk : COVER_LIMITS.song;
+    const updated = importCover(project, file, media, limits);
     saveMedia(project, updated, false);
     notifyChanged();
     return { media: updated, warnings: [], durationSource: "container" as const };

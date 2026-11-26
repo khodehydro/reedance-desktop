@@ -11,7 +11,7 @@ import { closeDatabase, openDatabase } from "../src/main/db";
 import { runQuickExport, verifyExport } from "../src/main/exporter";
 import { importDraftFile } from "../src/main/import";
 import { ensureStudioKeys, getAesKey, getSigningPublicKey } from "../src/main/keys";
-import { importAudio, importCover, withMeasuredDuration } from "../src/main/media";
+import { COVER_LIMITS, coverDimensions, importAudio, importCover, withMeasuredDuration } from "../src/main/media";
 import {
   distributeMarks,
   getProjectDetail,
@@ -123,6 +123,37 @@ function makeDraft(): ReetalkDraft {
     },
   };
 }
+
+/** A PNG signature + IHDR claiming width × height, padded with `pad` bytes. */
+function pngHeader(width: number, height: number, pad: number): Buffer {
+  const ihdr = Buffer.alloc(25);
+  ihdr.writeUInt32BE(13, 0);
+  ihdr.write("IHDR", 4, "ascii");
+  ihdr.writeUInt32BE(width, 8);
+  ihdr.writeUInt32BE(height, 12);
+  ihdr[16] = 8;
+  ihdr[17] = 6;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), ihdr, Buffer.alloc(pad, 7)]);
+}
+
+test("cover pixel size is read from the header without decoding", () => {
+  assert.deepEqual(coverDimensions(pngHeader(1600, 900, 8)), { width: 1600, height: 900 });
+  // Baseline JPEG: SOI, APP0 (16 bytes), SOF0 with 1080 × 1920.
+  const jpeg = Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+    0xff, 0xc0, 0x00, 0x11, 0x08, 0x07, 0x80, 0x04, 0x38, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+  ]);
+  assert.deepEqual(coverDimensions(jpeg), { width: 1080, height: 1920 });
+  // WebP VP8X canvas 2048 × 1024.
+  const webp = Buffer.alloc(30);
+  webp.write("RIFF", 0, "ascii");
+  webp.write("WEBP", 8, "ascii");
+  webp.write("VP8X", 12, "ascii");
+  webp.writeUIntLE(2047, 24, 3);
+  webp.writeUIntLE(1023, 27, 3);
+  assert.deepEqual(coverDimensions(webp), { width: 2048, height: 1024 });
+  assert.equal(coverDimensions(Buffer.from("not an image")), null);
+});
 
 let projectId = "";
 let draftBytes = Buffer.alloc(0);
@@ -270,12 +301,13 @@ test("export stays locked until the mandatory cover is selected", () => {
   assert.throws(() => runQuickExport(projectId, {}, { archiveRoot }), /export is locked/);
 
   const coverSource = path.join(workspace, "cover.png");
-  fs.writeFileSync(
-    coverSource,
-    Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 1)]),
-  );
+  fs.writeFileSync(coverSource, pngHeader(1600, 1600, 4096));
   const detail = getProjectDetail(projectId);
-  const withCover = importCover(projectId, coverSource, detail.media!);
+  // Too large for the Android ReeTalk installer (4096 px max side): refused up front.
+  const hugeSource = path.join(workspace, "huge.png");
+  fs.writeFileSync(hugeSource, pngHeader(5000, 3000, 64));
+  assert.throws(() => importCover(projectId, hugeSource, detail.media!, COVER_LIMITS.reetalk), /5000×3000/);
+  const withCover = importCover(projectId, coverSource, detail.media!, COVER_LIMITS.reetalk);
   saveMedia(projectId, withCover, false);
 
   const after = preflight(projectId);
@@ -312,6 +344,11 @@ test("an exportable ReeTalk pack holds exactly dialogue.json + audio + cover", (
     zip.entries.map((entry) => entry.name),
     ["dialogue.json", "audio.wav", "cover.png"],
     "the pack ships exactly dialogue.json + audio + cover, dialogue first",
+  );
+
+  assert.ok(
+    zip.files["cover.png"].equals(fs.readFileSync(path.join(workspace, "cover.png"))),
+    "the cover ships byte-for-byte: no resize, no recompression",
   );
 
   const dialogue = JSON.parse(zip.files["dialogue.json"].toString("utf8")) as ReetalkDialogue;

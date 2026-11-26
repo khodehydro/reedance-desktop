@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import type { DraftContent, ProjectDetail } from "@shared/types";
 import { api } from "../api";
 import { useLang } from "../i18n";
+import { CoverBox } from "./CoverBox";
 import { formatBytes, formatDate, formatSeconds, shortHash } from "../format";
 import { Button, Callout, Field, KeyValue, Mono, Section, Select, TextArea, TextInput, useToast } from "./ui";
 import type { UpdateContent } from "./ProjectPage";
@@ -117,19 +118,13 @@ export function OverviewTab({
                 { label: t("وارد‌شده در", "imported"), value: formatDate(media.importedAt) },
               ]}
             />
-            <div className="cover-box">
-              {coverUrl ? <img src={coverUrl} alt="cover" className="cover-preview" /> : <div className="cover-placeholder">COVER</div>}
-              <div className="row gap-sm">
-                <Button size="sm" variant="ghost" onClick={() => void selectCover()} disabled={busy !== null}>
-                  {detail.media?.coverPath ? t("تعویض کاور", "Replace cover") : t("انتخاب کاور", "Select cover")}
-                </Button>
-                {detail.media?.coverPath ? (
-                  <Button size="sm" variant="ghost" onClick={() => void removeCover()} disabled={busy !== null}>
-                    {t("حذف", "Remove")}
-                  </Button>
-                ) : null}
-              </div>
-            </div>
+            <CoverBox
+              coverUrl={coverUrl}
+              media={detail.media}
+              busy={busy !== null}
+              onSelect={() => void selectCover()}
+              onRemove={() => void removeCover()}
+            />
           </div>
         ) : (
           <Callout tone="warn" title={t("صوت هنوز انتخاب نشده است", "No audio selected yet")}>
