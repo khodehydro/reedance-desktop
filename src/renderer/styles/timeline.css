@@ -2,9 +2,17 @@
   gap: 12px;
 }
 
+.timeline-compact {
+  gap: 8px;
+}
+
+.timeline-compact .wave-scroll {
+  border-radius: 10px;
+}
+
 /*
- * Time is a left-to-right quantity: the axis, the seek bar, the playhead and
- * the capture line all advance from the left edge to the right edge, no matter
+ * Time is a left-to-right quantity: the axis, the waveform, the playhead
+ * and the markers all advance from the left edge to the right edge, no matter
  * that the surrounding UI is RTL.
  */
 .timeline-ltr {
@@ -56,59 +64,6 @@
   background: var(--surface-low);
 }
 
-/* The simple seek bar: one slider for the whole audio, plus the axis labels. */
-.seek-bar {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-low);
-  padding: 10px 14px 8px;
-  display: grid;
-  gap: 4px;
-}
-
-.seek-range {
-  width: 100%;
-  height: 6px;
-  appearance: none;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill, 0%), var(--surface-bright) var(--fill, 0%), var(--surface-bright) 100%);
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.seek-range::-webkit-slider-thumb {
-  appearance: none;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: #fff;
-  border: 3px solid var(--accent);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-  transition: transform 120ms ease;
-}
-
-.seek-range::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-}
-
-.seek-range::-moz-range-thumb {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: #fff;
-  border: 3px solid var(--accent);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-}
-
-.seek-axis {
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--muted);
-  direction: ltr;
-  unicode-bidi: embed;
-}
-
 .wave-scroll {
   overflow-x: auto;
   overflow-y: hidden;
@@ -139,67 +94,328 @@
   bottom: 0;
   left: 0;
   width: 2px;
+  margin-left: -1px;
   background: linear-gradient(180deg, #ffd66e, #ff9d57);
-  box-shadow: 0 0 12px rgba(255, 200, 110, 0.7);
+  box-shadow: 0 0 10px rgba(255, 200, 110, 0.7);
   pointer-events: none;
+  will-change: transform;
+  z-index: 4;
+}
+
+.playhead-handle {
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: #ffcf6b;
+  color: #1b1405;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  white-space: nowrap;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+.wave-hit {
+  z-index: 2;
+}
+
+/* Line markers on the waveform: start line + effective interval. */
+.wave-marker {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1;
   will-change: transform;
 }
 
-.playhead::after {
+.wave-marker::before {
   content: "";
-  position: absolute;
-  top: 0;
-  left: -4px;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 7px solid #ffd66e;
-}
-
-/* The draggable capture line: drag it (or click the waveform) to place a
-   time, then register line times at its position. */
-.drag-line {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
   width: 2px;
-  background: linear-gradient(180deg, var(--accent), rgba(155, 196, 255, 0.35));
-  box-shadow: 0 0 10px rgba(155, 196, 255, 0.55);
-  cursor: ew-resize;
-  touch-action: none;
-  will-change: transform;
+  background: var(--marker, #7fd1ff);
+  opacity: 0.9;
 }
 
-.drag-handle {
+.wave-marker.tone-0 {
+  --marker: #6fc3ff;
+  --marker-fill: rgba(111, 195, 255, 0.1);
+}
+
+.wave-marker.tone-1 {
+  --marker: #b59cff;
+  --marker-fill: rgba(181, 156, 255, 0.1);
+}
+
+.wave-marker.is-selected {
+  --marker: #ffd66e;
+  --marker-fill: rgba(255, 214, 110, 0.16);
+}
+
+.wave-marker.has-problem {
+  --marker: #ff6b6b;
+  --marker-fill: rgba(255, 107, 107, 0.18);
+}
+
+.wave-region {
   position: absolute;
-  top: -2px;
-  left: -14px;
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--accent);
+  inset: 0 1px 0 2px;
+  background: var(--marker-fill);
+  border-bottom: 3px solid var(--marker);
+}
+
+.wave-region.is-derived {
+  border-bottom-style: dashed;
+  opacity: 0.75;
+}
+
+.wave-marker-label {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0 6px 6px 0;
+  background: var(--marker);
   color: #0b1220;
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 700;
-  line-height: 1.4;
-  white-space: nowrap;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
-  user-select: none;
+  line-height: 15px;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 3;
 }
 
-.timeline-compact {
+.speed-group,
+.zoom-group,
+.loop-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.speed-chip {
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.speed-chip-on {
+  background: var(--accent);
+  color: #0b1220;
+  font-weight: 700;
+}
+
+.timeline-note {
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 205, 107, 0.4);
+  background: rgba(255, 205, 107, 0.08);
+  font-size: 12px;
+}
+
+.timeline-hint {
+  direction: rtl;
+  padding: 0 4px;
+}
+
+.timeline-compact .loop-group {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- */
+/* Capture dock: selected line + Start / End capture, side by side.  */
+/* ---------------------------------------------------------------- */
+
+.capture-dock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: stretch;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 205, 107, 0.06), rgba(255, 205, 107, 0.02));
+}
+
+.capture-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.capture-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.capture-index {
+  font-weight: 700;
+  font-size: 12px;
+  color: #ffd66e;
+}
+
+.capture-text {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.capture-translation {
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.capture-times {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.capture-times .derived code {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.capture-actions {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  justify-items: stretch;
+}
+
+.capture-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.timeline-compact .transport {
-  padding: 7px 10px;
+.capture-btn {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 168px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 80ms ease, filter 120ms ease;
 }
 
-.timeline-compact .step-group {
-  display: none;
+.capture-label {
+  text-align: start;
+  white-space: nowrap;
 }
+
+.capture-btn:hover {
+  filter: brightness(1.08);
+}
+
+.capture-btn:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.capture-start {
+  background: #2f8f62;
+  color: #fff;
+}
+
+.capture-end {
+  background: #b0553d;
+  color: #fff;
+}
+
+.capture-icon {
+  font-family: var(--mono);
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.capture-btn kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.capture-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.speaker-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  margin-inline-end: 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+.speaker-chip.tone-0 {
+  background: rgba(111, 195, 255, 0.18);
+  color: #9fd6ff;
+}
+
+.speaker-chip.tone-1 {
+  background: rgba(181, 156, 255, 0.2);
+  color: #cbbcff;
+}
+
+.timeline-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.timeline-error {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 107, 107, 0.5);
+  background: rgba(255, 107, 107, 0.1);
+  font-size: 12.5px;
+}
+
+/* ---------------------------------------------------------------- */
+/* Line table                                                        */
+/* ---------------------------------------------------------------- */
 
 .line-table {
   border: 1px solid var(--line);
@@ -211,30 +427,29 @@
 .line-head,
 .line-row {
   display: grid;
-  grid-template-columns: 34px minmax(160px, 1fr) 138px 138px 82px;
-  gap: 8px;
+  grid-template-columns: 38px minmax(0, 1fr) 176px 176px 40px;
+  gap: 10px;
   align-items: center;
   padding: 6px 12px;
 }
 
 .line-head {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
   color: var(--muted);
   background: var(--surface-low);
   border-bottom: 1px solid var(--line);
 }
 
 .line-rows {
-  max-height: 380px;
+  max-height: 420px;
   overflow: auto;
 }
 
 .line-row {
   border-bottom: 1px solid rgba(126, 164, 224, 0.07);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 12.5px;
 }
 
 .line-row:hover {
@@ -242,50 +457,129 @@
 }
 
 .line-selected {
-  background: rgba(255, 205, 107, 0.08);
-  box-shadow: inset 2px 0 0 rgba(255, 205, 107, 0.8);
+  background: rgba(255, 205, 107, 0.09);
+  box-shadow: inset -3px 0 0 #ffd66e;
+}
+
+.line-playing .line-number {
+  color: #ffd66e;
+  font-weight: 700;
+}
+
+.line-playing .line-number::after {
+  content: " ♪";
+}
+
+.line-problem {
+  box-shadow: inset -3px 0 0 #ff6b6b;
 }
 
 .line-number {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--muted);
+}
+
+.line-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .line-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: ltr;
-  text-align: start;
+  text-align: left;
 }
 
-.line-review {
-  display: inline-flex;
-  gap: 4px;
-  justify-content: flex-end;
+.line-issues {
+  font-size: 11px;
+  color: #ffc46b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.timecode-cell {
-  display: flex;
+.line-issues.is-blocking {
+  color: #ff8f8f;
+}
+
+.time-cell {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 26px;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
+  direction: ltr;
+}
+
+.time-capture,
+.time-seek {
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-low);
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+
+.time-capture:hover {
+  border-color: #ffd66e;
+  color: #ffd66e;
+}
+
+.time-seek:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .timecode {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 11.5px;
   padding: 4px 6px;
+  height: 28px;
   text-align: center;
+  min-width: 0;
 }
 
-@media (max-width: 980px) {
+.timecode.is-derived::placeholder {
+  color: var(--muted);
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.line-play {
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 1100px) {
+  .capture-dock {
+    grid-template-columns: 1fr;
+  }
+  .capture-secondary {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 900px) {
   .line-head,
   .line-row {
-    grid-template-columns: 28px minmax(120px, 1fr) 120px 84px;
+    grid-template-columns: 30px minmax(0, 1fr) 150px 150px 34px;
+    gap: 6px;
   }
-  .line-head span:nth-child(4),
-  .line-row > span:nth-child(4) {
-    display: none;
-  }
+}
+
+[data-theme="light"] .speaker-chip.tone-0 {
+  color: #1d5f99;
+}
+
+[data-theme="light"] .speaker-chip.tone-1 {
+  color: #5a3fb0;
+}
+
+[data-theme="light"] .capture-index {
+  color: #a26a00;
 }

@@ -10,11 +10,13 @@ import type {
   PreflightReport,
   ProjectDetail,
   ProjectSummary,
+  ReetalkDraft,
   RightsChecklist,
   Settings,
   StatsReport,
   StudioApi,
 } from "@shared/types";
+import reetalkDemo from "../../../tests/fixtures/reetalk-en-t01-s01.json";
 
 /**
  * Browser-only preview bridge.
@@ -487,8 +489,31 @@ function makeDemoAudio(): Blob {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
+/** `?demo=reetalk` loads the real reetalk-docs scenario en-t01-s01 into the mock. */
+function demoCoverUrl(): string {
+  const svg =
+    "<svg xmlns='http://www.w3.org/2000/svg' width='500' height='300' viewBox='0 0 500 300'>" +
+    "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#2b5876'/><stop offset='1' stop-color='#4e4376'/></linearGradient></defs>" +
+    "<rect width='500' height='300' fill='url(#g)'/><circle cx='170' cy='150' r='54' fill='#ffd66e' opacity='0.85'/>" +
+    "<circle cx='330' cy='150' r='54' fill='#9bc4ff' opacity='0.85'/><text x='250' y='272' font-family='sans-serif' font-size='22' fill='#fff' text-anchor='middle'>Hello, Sara and Amir</text></svg>";
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 export function createMockBridge(): StudioApi {
+  const demoReetalk = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "reetalk";
+  const dialogue = reetalkDemo as unknown as ReetalkDraft;
   const content = makeDemoContent();
+  if (demoReetalk) {
+    content.songId = dialogue.dialogueId;
+    content.title = dialogue.title.fa;
+    content.lyrics = dialogue.turns.map((turn) => ({
+      id: turn.id,
+      text: turn.text,
+      translationFa: turn.translation.fa,
+      translationEn: turn.translation.en,
+      tokens: [],
+    }));
+  }
   const audioBlob = makeDemoAudio();
   const audioUrl = URL.createObjectURL(audioBlob);
   let rights: RightsChecklist = {
@@ -512,11 +537,14 @@ export function createMockBridge(): StudioApi {
     bytes: 384044,
     importedAt: NOW,
     sourceName: "midnight-avenue-demo.wav",
+    ...(demoReetalk
+      ? { coverPath: "browser-preview://cover.svg", coverSha256: "c".repeat(64), coverMimeType: "image/png" as const, coverExtension: "png" as const, coverBytes: 2048 }
+      : {}),
   };
   let marks: LyricMark[] = content.lyrics.map((line, index) => ({
     lineId: line.id,
-    startMs: index * 4000,
-    endMs: (index + 1) * 4000 - 250,
+    startMs: demoReetalk ? index * 2900 + 200 : index * 4000,
+    endMs: demoReetalk ? (index % 3 === 1 ? index * 2900 + 2600 : null) : (index + 1) * 4000 - 250,
     reviewed: index < 2,
     reviewedAudioSha: index < 2 ? media.audioSha256 : null,
     reviewedLineSha: index < 2 ? "reviewed" : null,
@@ -564,7 +592,7 @@ export function createMockBridge(): StudioApi {
 
   const summary = (): ProjectSummary => ({
     projectId: "prj-preview",
-    kind: "song",
+    kind: demoReetalk ? "reetalk" : "song",
     songId: content.songId,
     targetLanguage: content.targetLanguage,
     locale: content.locale,
@@ -595,7 +623,7 @@ export function createMockBridge(): StudioApi {
 
   const detail = (): ProjectDetail => ({
     summary: summary(),
-    content: JSON.parse(JSON.stringify(content)) as DraftContent,
+    content: demoReetalk ? (JSON.parse(JSON.stringify(dialogue)) as ReetalkDraft) : (JSON.parse(JSON.stringify(content)) as DraftContent),
     marks: marks.map((mark) => ({ ...mark })),
     media,
     rights,
@@ -734,7 +762,7 @@ export function createMockBridge(): StudioApi {
         return { media, warnings: [], durationSource: "container" as const };
       },
       reportDuration: async () => ({ media, warnings: [], durationSource: "container" }),
-      playUrl: async (_projectId, kind) => (kind === "cover" ? null : audioUrl),
+      playUrl: async (_projectId, kind) => (kind === "cover" ? (demoReetalk ? demoCoverUrl() : null) : audioUrl),
       bytes: async () => audioBlob.arrayBuffer(),
       speak: async () => true,
     },

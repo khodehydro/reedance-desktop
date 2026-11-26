@@ -17,7 +17,7 @@ import { rescanArchive, stageExport } from "./archive";
 import { runExport, runQuickExport, verifyExportReport } from "./exporter";
 import { createEmptyDraft, importDraftFile } from "./import";
 import { ensureStudioKeys } from "./keys";
-import { importAudio, importCover, importStoryAudio, withMeasuredDuration } from "./media";
+import { importAudio, importCover, importStoryAudio, reconcileDecodedDuration } from "./media";
 import { publishExport } from "./publication";
 import {
   approveProject,
@@ -325,21 +325,11 @@ export function registerIpc(): void {
     const project = id(projectId, "projectId");
     const media = readMedia(project)?.media;
     if (!media) throw new Error("no audio selected");
-    const isStory = kind === "story-audio";
-    if (isStory) {
-      if (media.storyAudioDurationMs && media.storyAudioDurationMs > 0) {
-        return { media, warnings: [], durationSource: "container" as const };
-      }
-      if (!media.storyAudioPath) throw new Error("no story audio selected");
-      const updated = { ...media, storyAudioDurationMs: Math.round(num(durationMs, "durationMs", 1)) };
-      saveMedia(project, updated, false);
-      notifyChanged();
-      return { media: updated, warnings: [], durationSource: "decoder" as const };
-    }
-    if (media.durationMs > 0) {
-      return { media, warnings: [], durationSource: "container" as const };
-    }
-    const updated = withMeasuredDuration(media, num(durationMs, "durationMs", 1));
+    const which = kind === "story-audio" ? "story-audio" : "audio";
+    // The decoder measurement wins over a wrong container header (see
+    // reconcileDecodedDuration); within tolerance nothing changes.
+    const updated = reconcileDecodedDuration(media, num(durationMs, "durationMs", 1), which);
+    if (!updated) return { media, warnings: [], durationSource: "container" as const };
     saveMedia(project, updated, false);
     notifyChanged();
     return { media: updated, warnings: [], durationSource: "decoder" as const };

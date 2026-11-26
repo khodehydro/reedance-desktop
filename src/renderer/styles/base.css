@@ -1447,7 +1447,6 @@ code,
 [data-theme="light"] .table-editor,
 [data-theme="light"] .line-table,
 [data-theme="light"] .transport,
-[data-theme="light"] .seek-bar,
 [data-theme="light"] .story-line-block {
   background: #f5f8fd;
 }

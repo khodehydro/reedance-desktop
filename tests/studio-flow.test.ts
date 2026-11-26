@@ -98,8 +98,11 @@ test("choosing audio copies it into the project and moves the state forward", ()
 test("marks must be inside the audio and increase strictly", () => {
   assert.throws(
     () => saveMarks(projectId, [{ lineId: "line-1", startMs: 5000, endMs: null }], audio, draft),
-    /outside the audio/,
+    /outside the audio: 0:05\.000 ≥ audio length 0:04\.000/,
   );
+  // An unmeasured (0 ms) duration must not reject every mark: the decoder
+  // reports the real length moments later and the export gate re-checks.
+  saveMarks(projectId, [{ lineId: "line-1", startMs: 1000, endMs: null }], { ...audio, durationMs: 0 }, draft);
   saveMarks(
     projectId,
     [

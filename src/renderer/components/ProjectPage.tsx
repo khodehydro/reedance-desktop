@@ -10,6 +10,7 @@ import { TimelineTab, type TimelineLine } from "./TimelineTab";
 import { LearningTab } from "./LearningTab";
 import { QuizTab } from "./QuizTab";
 import { ReviewExportTab } from "./ReviewExportTab";
+import { PreviewTab } from "./PreviewTab";
 import { Badge, Button, Callout, Spinner, Tabs, useToast } from "./ui";
 
 export type UpdateContent = (mutator: (draft: DraftContent) => void) => void;
@@ -22,7 +23,7 @@ const STATE_LABEL: Record<string, { fa: string; en: string; tone: "muted" | "inf
   approved: { fa: "آمادهٔ خروجی", en: "ready to export", tone: "ok" },
 };
 
-type TabId = "overview" | "timeline" | "lyrics" | "story" | "learning" | "quiz" | "review";
+type TabId = "overview" | "timeline" | "lyrics" | "story" | "learning" | "quiz" | "preview" | "review";
 
 export function ProjectPage({
   projectId,
@@ -108,11 +109,15 @@ export function ProjectPage({
   // content or marks actually change — TimelineTab resyncs on identity).
   const turnLines: TimelineLine[] = useMemo(() => {
     if (!content || !isReeTalkContent(content)) return [];
+    const speakerIndex = new Map(content.speakers.map((speaker, index) => [speaker.id, index]));
+    const speakerName = new Map(content.speakers.map((speaker) => [speaker.id, speaker.name]));
     return content.turns.map((turn) => ({
       id: turn.id,
       text: turn.text,
       translationEn: turn.translation.en,
-      badge: turn.speakerId,
+      translationFa: turn.translation.fa,
+      badge: speakerName.get(turn.speakerId) ?? turn.speakerId,
+      tone: (speakerIndex.get(turn.speakerId) === 1 ? 1 : 0) as 0 | 1,
     }));
   }, [content]);
 
@@ -189,6 +194,9 @@ export function ProjectPage({
                     ? t("خطای ذخیره", "save error")
                     : ""}
           </span>
+          <Button variant="ghost" size="sm" onClick={() => setTab("preview")} title={t("پیش‌نمایش شبیه صفحهٔ اندروید، قبل از خروجی", "Android-style preview before exporting")}>
+            📱 {t("شبیه‌ساز", "Simulator")}
+          </Button>
           <Button variant="primary" size="sm" onClick={() => setTab("review")}>
             {t("بازبینی و خروجی", "Review & export")}
           </Button>
@@ -203,6 +211,7 @@ export function ProjectPage({
             ? [
                 { id: "overview", label: t("نمای کلی و صوت", "Overview & audio") },
                 { id: "timeline", label: t("تایم‌لاین", "Timeline"), badge: `${summary.timedCount}/${summary.lineCount}` },
+                { id: "preview", label: t("شبیه‌ساز اندروید", "Android simulator") },
                 { id: "review", label: t("خروجی", "Export") },
               ]
             : [
@@ -216,6 +225,7 @@ export function ProjectPage({
                 },
                 { id: "learning", label: t("آموزش", "Learning") },
                 { id: "quiz", label: t("آزمون", "Quiz"), badge: isReeTalkContent(content) ? 0 : content.questions.length },
+                { id: "preview", label: t("شبیه‌ساز اندروید", "Android simulator") },
                 { id: "review", label: t("خروجی", "Export") },
               ]
         }
@@ -245,6 +255,8 @@ export function ProjectPage({
         <LearningTab content={content as DraftContent} update={update} />
       ) : tab === "quiz" ? (
         <QuizTab content={content as DraftContent} update={update} />
+      ) : tab === "preview" ? (
+        <PreviewTab detail={detail} content={content} onOpenTimeline={() => setTab("timeline")} onOpenExport={() => setTab("review")} />
       ) : (
         <ReviewExportTab
           detail={detail}

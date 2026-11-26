@@ -97,57 +97,161 @@ function m4aDurationMs(buffer: Buffer): number | null {
   }
 }
 
-function mp3DurationMs(buffer: Buffer): number | null {
-  // Prefer a Xing/Info VBR header (frames × samples per frame).
-  const search = buffer.subarray(0, Math.min(buffer.length, 200_000));
-  const xingIndex = search.indexOf(Buffer.from("Xing"));
-  const infoIndex = search.indexOf(Buffer.from("Info"));
-  const headerIndex = xingIndex >= 0 ? xingIndex : infoIndex;
-  const bitratesV1L3 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
-  const sampleRatesV1 = [44100, 48000, 32000];
+/* ---------------------------------------------------------------- */
+/* MP3: exact duration from the frame stream.                        */
+/* ---------------------------------------------------------------- */
 
-  const findFrame = (): number => {
-    for (let i = 0; i + 4 < search.length; i += 1) {
-      if (search[i] === 0xff && (search[i + 1] & 0xe0) === 0xe0) return i;
-    }
-    return -1;
-  };
-  const frameOffset = findFrame();
-  if (frameOffset < 0) return null;
-  const b1 = search[frameOffset + 1];
-  const b2 = search[frameOffset + 2];
-  const b3 = search[frameOffset + 3];
-  const versionBits = (b1 >> 3) & 0x03; // 3 = MPEG1
-  const layerBits = (b1 >> 1) & 0x03; // 1 = layer III
+const MP3_BITRATES: Record<string, number[]> = {
+  // [version][layer] → kbps by index (0 = free format, unsupported here).
+  "1-1": [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448],
+  "1-2": [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384],
+  "1-3": [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+  "2-1": [0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256],
+  "2-2": [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+  "2-3": [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+};
+const MP3_SAMPLE_RATES: Record<number, number[]> = {
+  1: [44100, 48000, 32000],
+  2: [22050, 24000, 16000],
+  25: [11025, 12000, 8000],
+};
+
+export interface Mp3Frame {
+  /** 1 = MPEG-1, 2 = MPEG-2, 25 = MPEG-2.5 */
+  version: 1 | 2 | 25;
+  layer: 1 | 2 | 3;
+  sampleRate: number;
+  samples: number;
+  length: number;
+  mono: boolean;
+}
+
+/** Parse a 4-byte MPEG audio frame header; null when it is not a valid one. */
+export function parseMp3Frame(buffer: Buffer, offset: number): Mp3Frame | null {
+  if (offset + 4 > buffer.length) return null;
+  const b1 = buffer[offset + 1];
+  const b2 = buffer[offset + 2];
+  const b3 = buffer[offset + 3];
+  if (buffer[offset] !== 0xff || (b1 & 0xe0) !== 0xe0) return null;
+  const versionBits = (b1 >> 3) & 0x03;
+  const layerBits = (b1 >> 1) & 0x03;
+  if (versionBits === 1 || layerBits === 0) return null;
+  const version: 1 | 2 | 25 = versionBits === 3 ? 1 : versionBits === 2 ? 2 : 25;
+  const layer = (4 - layerBits) as 1 | 2 | 3;
   const bitrateIndex = (b2 >> 4) & 0x0f;
   const sampleRateIndex = (b2 >> 2) & 0x03;
+  if (bitrateIndex === 0 || bitrateIndex === 15 || sampleRateIndex === 3) return null;
   const padding = (b2 >> 1) & 0x01;
-  if (layerBits !== 1) return null;
-  const sampleRate = versionBits === 3 ? sampleRatesV1[sampleRateIndex] : sampleRatesV1[sampleRateIndex] / 2;
-  if (!sampleRate) return null;
+  const bitrate = MP3_BITRATES[`${version === 1 ? 1 : 2}-${layer}`][bitrateIndex] * 1000;
+  const sampleRate = MP3_SAMPLE_RATES[version][sampleRateIndex];
+  let samples: number;
+  let length: number;
+  if (layer === 1) {
+    samples = 384;
+    length = (Math.floor((12 * bitrate) / sampleRate) + padding) * 4;
+  } else {
+    samples = layer === 3 && version !== 1 ? 576 : 1152;
+    const coefficient = layer === 3 && version !== 1 ? 72 : 144;
+    length = Math.floor((coefficient * bitrate) / sampleRate) + padding;
+  }
+  if (length < 24) return null;
+  return { version, layer, sampleRate, samples, length, mono: ((b3 >> 6) & 0x03) === 3 };
+}
 
-  if (headerIndex >= 0 && headerIndex + 12 <= search.length) {
-    const flags = search.readUInt32BE(headerIndex + 4);
-    const framesOffset = headerIndex + 8;
-    const hasFrames = (flags & 0x00000001) !== 0;
-    if (hasFrames) {
-      const frames = search.readUInt32BE(framesOffset);
-      const samplesPerFrame = versionBits === 3 ? 1152 : 576;
-      if (frames > 0) return Math.round(((frames * samplesPerFrame) / sampleRate) * 1000);
+/** Bytes taken by leading ID3v2 tags (there can be more than one). */
+function id3v2Size(buffer: Buffer): number {
+  let offset = 0;
+  while (offset + 10 <= buffer.length && buffer.subarray(offset, offset + 3).toString("latin1") === "ID3") {
+    const size =
+      ((buffer[offset + 6] & 0x7f) << 21) |
+      ((buffer[offset + 7] & 0x7f) << 14) |
+      ((buffer[offset + 8] & 0x7f) << 7) |
+      (buffer[offset + 9] & 0x7f);
+    const footer = (buffer[offset + 5] & 0x10) !== 0 ? 10 : 0;
+    offset += 10 + size + footer;
+  }
+  return Math.min(offset, buffer.length);
+}
+
+function sameStream(a: Mp3Frame, b: Mp3Frame): boolean {
+  return a.version === b.version && a.layer === b.layer && a.sampleRate === b.sampleRate;
+}
+
+/**
+ * First real frame after the tags: a header whose successor (at exactly
+ * header + frame length) is another header of the same stream. Album art and
+ * tag payloads are full of 0xFFEx byte pairs, so a single header match is not
+ * enough — that was the old parser's bug and produced durations that were
+ * seconds or minutes off.
+ */
+function firstMp3Frame(buffer: Buffer, from: number): { offset: number; frame: Mp3Frame } | null {
+  const limit = Math.min(buffer.length - 4, from + 2_000_000);
+  for (let offset = from; offset <= limit; offset += 1) {
+    if (buffer[offset] !== 0xff) continue;
+    const frame = parseMp3Frame(buffer, offset);
+    if (!frame) continue;
+    const nextOffset = offset + frame.length;
+    if (nextOffset === buffer.length) return { offset, frame };
+    const next = parseMp3Frame(buffer, nextOffset);
+    if (next && sameStream(frame, next)) return { offset, frame };
+  }
+  return null;
+}
+
+/** Frame count from a Xing/Info or VBRI header inside the first frame, if present. */
+function vbrHeaderFrames(buffer: Buffer, offset: number, frame: Mp3Frame): number | null {
+  if (frame.layer === 3) {
+    const sideInfo = frame.version === 1 ? (frame.mono ? 17 : 32) : frame.mono ? 9 : 17;
+    const xing = offset + 4 + sideInfo;
+    if (xing + 12 <= buffer.length) {
+      const tag = buffer.subarray(xing, xing + 4).toString("latin1");
+      if (tag === "Xing" || tag === "Info") {
+        const flags = buffer.readUInt32BE(xing + 4);
+        if ((flags & 0x1) !== 0) {
+          const frames = buffer.readUInt32BE(xing + 8);
+          if (frames > 0) return frames;
+        }
+      }
     }
   }
+  const vbri = offset + 4 + 32;
+  if (vbri + 18 <= buffer.length && buffer.subarray(vbri, vbri + 4).toString("latin1") === "VBRI") {
+    const frames = buffer.readUInt32BE(vbri + 14);
+    if (frames > 0) return frames;
+  }
+  return null;
+}
 
-  const bitrate = bitratesV1L3[bitrateIndex];
-  if (!bitrate) return null;
-  const frameLength = Math.floor(((versionBits === 3 ? 144 : 72) * bitrate * 1000) / sampleRate) + padding;
-  const id3Size = buffer.subarray(0, 3).toString("ascii") === "ID3"
-    ? 10 + ((buffer[6] & 0x7f) << 21) + ((buffer[7] & 0x7f) << 14) + ((buffer[8] & 0x7f) << 7) + (buffer[9] & 0x7f)
-    : 0;
-  const audioBytes = buffer.length - id3Size;
-  if (frameLength <= 0) return null;
-  const frames = Math.floor(audioBytes / frameLength);
-  const samplesPerFrame = versionBits === 3 ? 1152 : 576;
-  return Math.round(((frames * samplesPerFrame) / sampleRate) * 1000);
+/**
+ * Exact MP3 duration. Uses the encoder's Xing/Info/VBRI frame count when it is
+ * there; otherwise walks every frame header and sums the samples, which is
+ * exact for CBR and VBR alike (a 240 MiB file is well under a million frames).
+ */
+export function mp3DurationMs(buffer: Buffer): number | null {
+  const first = firstMp3Frame(buffer, id3v2Size(buffer));
+  if (!first) return null;
+  const { frame: head } = first;
+  const declared = vbrHeaderFrames(buffer, first.offset, head);
+  if (declared !== null) return Math.round(((declared * head.samples) / head.sampleRate) * 1000);
+
+  let samples = 0;
+  let offset = first.offset;
+  while (offset + 4 <= buffer.length) {
+    const frame = parseMp3Frame(buffer, offset);
+    if (frame && sameStream(frame, head) && offset + frame.length <= buffer.length + frame.length / 2) {
+      samples += frame.samples;
+      offset += frame.length;
+      continue;
+    }
+    // Trailing tags end the stream; anything else is junk to resync over.
+    const marker = buffer.subarray(offset, offset + 8).toString("latin1");
+    if (marker.startsWith("TAG") || marker === "APETAGEX" || marker.startsWith("LYRICS")) break;
+    const resync = firstMp3Frame(buffer, offset + 1);
+    if (!resync || !sameStream(resync.frame, head) || resync.offset - offset > 65_536) break;
+    offset = resync.offset;
+  }
+  if (samples === 0) return null;
+  return Math.round((samples / head.sampleRate) * 1000);
 }
 
 export function probeAudio(buffer: Buffer, fileName: string): ProbeResult {
@@ -218,7 +322,10 @@ export function importAudio(projectId: string, sourcePath: string, previous: Med
     audioSha256: sha,
     mimeType: probe.mimeType,
     extension: probe.extension,
-    durationMs: probe.durationMs ?? previous?.durationMs ?? 0,
+    // A different file must never inherit the old file's length (that made
+    // valid marks look "outside the audio"). Re-importing the very same file
+    // keeps the stored value, which may already be the decoder-measured one.
+    durationMs: previous && previous.audioSha256 === sha && previous.durationMs > 0 ? previous.durationMs : (probe.durationMs ?? 0),
     bytes: buffer.length,
     importedAt: new Date().toISOString(),
     sourceName: path.basename(sourcePath),
@@ -265,7 +372,10 @@ export function importStoryAudio(projectId: string, sourcePath: string, previous
     storyAudioSha256: sha,
     storyAudioMimeType: probe.mimeType,
     storyAudioExtension: probe.extension,
-    storyAudioDurationMs: probe.durationMs ?? previous.storyAudioDurationMs ?? 0,
+    storyAudioDurationMs:
+      previous.storyAudioSha256 === sha && (previous.storyAudioDurationMs ?? 0) > 0
+        ? previous.storyAudioDurationMs
+        : (probe.durationMs ?? 0),
     storyAudioBytes: buffer.length,
   };
 }
@@ -298,6 +408,36 @@ export function withMeasuredDuration(media: MediaInfo, durationMs: number): Medi
     throw new Error("measured duration is out of range");
   }
   return { ...media, durationMs: Math.round(durationMs) };
+}
+
+/**
+ * The decoder is the ground truth for what the operator hears: the timeline's
+ * waveform, playhead and capture times all come from Chromium's decode of the
+ * same project file. Container headers can be wrong (VBR without a Xing frame,
+ * broken muxers), and a too-short duration makes legitimate marks fail with
+ * "outside the audio" while the waveform is stretched over the wrong width.
+ * A decoder measurement that disagrees with the stored value by more than
+ * this tolerance replaces it.
+ */
+export const DURATION_TOLERANCE_MS = 250;
+
+export function reconcileDecodedDuration(
+  media: MediaInfo,
+  measuredMs: number,
+  kind: "audio" | "story-audio",
+): MediaInfo | null {
+  if (!Number.isFinite(measuredMs) || measuredMs <= 0 || measuredMs > 86_400_000) {
+    throw new Error("measured duration is out of range");
+  }
+  const measured = Math.round(measuredMs);
+  if (kind === "story-audio") {
+    if (!media.storyAudioPath) throw new Error("no story audio selected");
+    const stored = media.storyAudioDurationMs ?? 0;
+    if (stored > 0 && Math.abs(stored - measured) <= DURATION_TOLERANCE_MS) return null;
+    return { ...media, storyAudioDurationMs: measured };
+  }
+  if (media.durationMs > 0 && Math.abs(media.durationMs - measured) <= DURATION_TOLERANCE_MS) return null;
+  return { ...media, durationMs: measured };
 }
 
 export { COVER_MIME, MIME_BY_EXTENSION };

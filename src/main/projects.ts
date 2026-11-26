@@ -924,6 +924,13 @@ export function saveMedia(projectId: string, media: MediaInfo, resetReview: bool
   refreshState(projectId);
 }
 
+function clock(ms: number): string {
+  const total = Math.max(0, Math.round(ms));
+  const minutes = Math.floor(total / 60_000);
+  const seconds = Math.floor((total % 60_000) / 1000);
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(total % 1000).padStart(3, "0")}`;
+}
+
 export function saveMarks(
   projectId: string,
   patch: { lineId: string; startMs: number | null; endMs: number | null }[],
@@ -944,8 +951,13 @@ export function saveMarks(
       if (mark.endMs !== null && (!Number.isInteger(mark.endMs) || mark.endMs < 0)) {
         throw new Error(`invalid endMs for ${mark.lineId}`);
       }
-      if (media && mark.startMs !== null && mark.startMs >= media.durationMs) {
-        throw new Error(`startMs for ${mark.lineId} is outside the audio`);
+      // Only a *known* duration can reject a mark: with an unmeasured (0)
+      // duration every start used to be refused and the whole batch was lost.
+      if (media && media.durationMs > 0 && mark.startMs !== null && mark.startMs >= media.durationMs) {
+        throw new Error(
+          `startMs for ${mark.lineId} is outside the audio: ${clock(mark.startMs)} ≥ audio length ${clock(media.durationMs)}. ` +
+            `زمان شروع ${mark.lineId} بعد از پایان فایل صوتی است — اگر طول صوت اشتباه است، فایل صوتی را دوباره انتخاب کنید.`,
+        );
       }
       if (mark.startMs !== null && mark.endMs !== null && mark.endMs <= mark.startMs) {
         throw new Error(`endMs for ${mark.lineId} must be after startMs`);

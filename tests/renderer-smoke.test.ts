@@ -46,12 +46,16 @@ async function bundle(): Promise<string> {
   return result.outputFiles[0].text;
 }
 
-test("the renderer mounts the app shell, splash and library in a browser-like environment", async () => {
-  const code = await bundle();
+let bundled: Promise<string> | null = null;
+
+/** Bundles the renderer once and mounts it in a fresh jsdom window at `url`. */
+async function boot(url: string) {
+  bundled ??= bundle();
+  const code = await bundled;
 
   const dom = new JSDOM(
     `<!doctype html><html lang="fa" dir="rtl"><head></head><body><div id="root"></div><div id="boot-splash"></div></body></html>`,
-    { runScripts: "dangerously", pretendToBeVisual: true, url: "http://localhost/" },
+    { runScripts: "dangerously", pretendToBeVisual: true, url },
   );
   const { window } = dom;
 
@@ -121,6 +125,11 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
 
   // Let React commit and the mock bootstrap promises resolve.
   await new Promise((resolve) => setTimeout(resolve, 250));
+  return { window, errors, drawn };
+}
+
+test("the renderer mounts the app shell, splash and library in a browser-like environment", async () => {
+  const { window, errors, drawn } = await boot("http://localhost/");
 
   const text = window.document.body.textContent ?? "";
   assert.deepEqual(errors, []);
@@ -176,6 +185,20 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
   assert.ok(/ثبت شروع سطر|Capture line start/.test(timelineText), "the waveform editor mounts");
   assert.ok(window.document.querySelector(".wave-canvas"), "the waveform canvas is rendered");
   assert.ok(window.document.querySelectorAll(".line-row").length > 0, "lyric lines are listed under the waveform");
+  assert.ok(window.document.querySelector(".capture-dock .capture-start"), "the start capture button sits in the capture dock");
+  assert.ok(window.document.querySelector(".capture-dock .capture-end"), "the end capture button sits next to it");
+  assert.ok(window.document.querySelectorAll(".line-row .time-cell").length >= 2, "each row has start and end time cells");
+
+  // Android simulator: phone frame with the lyric player.
+  const previewTab = Array.from(window.document.querySelectorAll(".tab")).find((element) =>
+    (element.textContent ?? "").includes("شبیه‌ساز اندروید"),
+  );
+  assert.ok(previewTab, "the Android simulator tab exists");
+  (previewTab as unknown as HTMLElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.ok(window.document.querySelector(".phone .ph-lyrics"), "the simulator renders the phone lyric player");
+  assert.ok(window.document.querySelectorAll(".ph-lyric").length > 0, "the simulator lists the lyric lines");
+  assert.ok(/آمادگی خروجی|Export readiness/.test(window.document.body.textContent ?? ""), "the simulator shows export readiness");
 
   // The story tab must mount its story-audio timeline once a story audio is
   // added: same waveform/transport/capture-line toolkit as the lyric timeline.
@@ -193,7 +216,7 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
   await new Promise((resolve) => setTimeout(resolve, 250));
   const storyText = window.document.body.textContent ?? "";
   assert.ok(/story\.mp3/.test(storyText), "the added story audio is shown");
-  assert.ok(window.document.querySelector(".timeline-ltr .drag-line"), "the story audio timeline mounts the capture line");
+  assert.ok(window.document.querySelector(".timeline-ltr .playhead"), "the story audio timeline mounts the playhead (capture position)");
   assert.ok(window.document.querySelector(".timeline-ltr .wave-canvas"), "the story audio timeline mounts the waveform");
 
   // Every remaining project tab must mount too: the content editors, the quiz
@@ -226,5 +249,51 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
   assert.equal(window.document.documentElement.dataset.theme, "dark");
   assert.ok(window.document.querySelector(".app"), "the shell survives the theme change");
 
+  assert.deepEqual(errors, [], errors.join("; "));
+});
+
+test("the Android simulator renders a ReeTalk scenario as the chat screen", async () => {
+  const { window, errors } = await boot("http://localhost/?demo=reetalk");
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const card = window.document.querySelector(".project-card");
+  assert.ok(card, "the ReeTalk demo project is listed");
+  const openButton = Array.from(card!.querySelectorAll("button")).find((button) =>
+    /بازکردن|باز کردن|Open/i.test(button.textContent ?? ""),
+  );
+  (openButton as unknown as HTMLElement).click();
+  await wait(200);
+
+  const tab = Array.from(window.document.querySelectorAll(".tab")).find((element) =>
+    (element.textContent ?? "").includes("شبیه‌ساز اندروید"),
+  );
+  assert.ok(tab, "ReeTalk projects get the simulator tab");
+  (tab as unknown as HTMLElement).click();
+  await wait(250);
+
+  const doc = window.document;
+  assert.ok(doc.querySelector(".phone .ph-chat"), "the chat screen renders inside the phone frame");
+  assert.equal(doc.querySelectorAll(".ph-pills .ph-pill").length, 5, "chat + words + grammar + phrases + questions");
+  assert.ok(doc.querySelector(".ph-cover img"), "the cover is shown before playback, like the app");
+  assert.ok(doc.querySelector(".ph-hint"), "the tap-play hint bubble is shown");
+  assert.equal(doc.querySelectorAll(".ph-avatar").length, 2, "both speakers have an avatar");
+  assert.ok((doc.querySelector(".ph-player")?.textContent ?? "").includes("Sara"), "speaker names come from the scenario");
+  assert.ok(doc.querySelector(".ph-play"), "the central play button exists");
+
+  // Learning pages render from the scenario's learning block.
+  const pill = (label: string) =>
+    Array.from(doc.querySelectorAll(".ph-pill")).find((element) => (element.textContent ?? "").includes(label)) as unknown as HTMLElement;
+  pill("لغات").click();
+  await wait(80);
+  assert.ok(doc.querySelectorAll(".ph-learning .ph-card").length > 0, "vocabulary cards render");
+  pill("سؤال").click();
+  await wait(80);
+  const option = doc.querySelector(".ph-option") as unknown as HTMLElement;
+  assert.ok(option, "quiz options render");
+  option.click();
+  await wait(80);
+  assert.ok(doc.querySelector(".ph-option.is-correct"), "answering reveals the correct option");
+  pill("چت").click();
+  await wait(80);
+  assert.ok(doc.querySelector(".ph-chat"), "returning to chat works");
   assert.deepEqual(errors, [], errors.join("; "));
 });

@@ -6,6 +6,7 @@ import "@fontsource/vazirmatn/700.css";
 import "./styles/base.css";
 import "./styles/app.css";
 import "./styles/timeline.css";
+import "./styles/preview.css";
 import App from "./App";
 
 const container = document.getElementById("root");
