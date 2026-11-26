@@ -97,6 +97,17 @@ function duplicateIds(prefix: string, items: { id?: unknown }[], issues: Issue[]
 }
 
 /**
+ * Turn-count limits for a ReeTalk dialogue. Lowered from the proposal's 10 / 5
+ * to 8 / 4 so the authored scenario library in `reetalk-docs` (eight-turn,
+ * four-per-speaker source dialogues) imports as-is. The Android validator and
+ * `docs/interop/REETALK_PACKAGE_FA.md` must apply the same numbers before a
+ * pack built from such a draft is published.
+ */
+export const REETALK_MIN_TURNS = 8;
+export const REETALK_MAX_TURNS = 120;
+export const REETALK_MIN_TURNS_PER_SPEAKER = 4;
+
+/**
  * Structural + semantic validation of an imported `.reetalkdraft.json`.
  * Mirrors the contract tables in REETALK_PACKAGE_FA.md §2 and the semantic
  * rules both sides must enforce (§5.1).
@@ -170,8 +181,12 @@ export function validateReeTalkDraft(value: unknown): Issue[] {
 
   // Turns: count, per-speaker minimum, references, token reconstruction.
   const turns = Array.isArray(draft.turns) ? draft.turns : [];
-  if (turns.length < 10 || turns.length > 120) {
-    issues.push({ path: "$.turns", message: `a dialogue needs 10–120 turns, found ${turns.length}`, severity: "error" });
+  if (turns.length < REETALK_MIN_TURNS || turns.length > REETALK_MAX_TURNS) {
+    issues.push({
+      path: "$.turns",
+      message: `a dialogue needs ${REETALK_MIN_TURNS}–${REETALK_MAX_TURNS} turns, found ${turns.length}`,
+      severity: "error",
+    });
   }
   duplicateIds("$.turns", turns, issues);
   const perSpeaker = new Map<string, number>();
@@ -228,10 +243,10 @@ export function validateReeTalkDraft(value: unknown): Issue[] {
   });
   for (const speakerId of speakerIds) {
     const count = perSpeaker.get(speakerId) ?? 0;
-    if (turns.length >= 10 && count < 5) {
+    if (turns.length >= REETALK_MIN_TURNS && count < REETALK_MIN_TURNS_PER_SPEAKER) {
       issues.push({
         path: "$.turns",
-        message: `speaker "${speakerId}" has ${count} turns; at least 5 are required`,
+        message: `speaker "${speakerId}" has ${count} turns; at least ${REETALK_MIN_TURNS_PER_SPEAKER} are required`,
         severity: "error",
       });
     }

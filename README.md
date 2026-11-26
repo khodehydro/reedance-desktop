@@ -23,7 +23,11 @@ ReeTalk pack is deliberately different — exactly `dialogue.json + audio + cove
 and no-overlap timing rules where a recorded turn end is kept as a silence gap
 and a missing end falls back to the next turn's start (last turn: the audio
 duration). ReeTalk content is imported once and never edited in the studio; the
-tabs reduce to overview/audio, timeline and export.
+tabs reduce to overview/audio, timeline and export. A dialogue needs
+**8–120 turns with at least 4 per speaker** (lowered from the proposal's 10 / 5
+so the authored `reetalk-docs` scenarios — eight turns, four per speaker —
+import unchanged; the Android validator must accept the same floor). Draft
+files may keep a plain `.json` name.
 
 The UI is Persian-first with a full English switch, RTL, blue/white, ships
 **dark, light and follow-system themes**, and uses

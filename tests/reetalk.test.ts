@@ -21,7 +21,12 @@ import {
   saveMarks,
   saveMedia,
 } from "../src/main/projects";
-import { validateReeTalkDraft, validateReeTalkDialogue } from "../src/main/reetalk";
+import {
+  REETALK_MIN_TURNS,
+  REETALK_MIN_TURNS_PER_SPEAKER,
+  validateReeTalkDraft,
+  validateReeTalkDialogue,
+} from "../src/main/reetalk";
 import { computeStats } from "../src/main/stats";
 
 const repo = path.join(__dirname, "..");
@@ -148,8 +153,56 @@ test("a contract-valid ReeTalk draft passes validation; broken ones do not", () 
   assert.ok(validateReeTalkDraft(noGist).some((issue) => issue.message.includes("gist question")));
 
   const tooFewTurns = makeDraft();
-  tooFewTurns.turns = tooFewTurns.turns.slice(0, 9);
-  assert.ok(validateReeTalkDraft(tooFewTurns).some((issue) => issue.message.includes("10–120 turns")));
+  tooFewTurns.turns = tooFewTurns.turns.slice(0, REETALK_MIN_TURNS - 1);
+  assert.ok(validateReeTalkDraft(tooFewTurns).some((issue) => issue.message.includes("8–120 turns")));
+});
+
+test("turn limits: 8 turns with 4 per speaker is the accepted minimum", () => {
+  assert.equal(REETALK_MIN_TURNS, 8);
+  assert.equal(REETALK_MIN_TURNS_PER_SPEAKER, 4);
+
+  // Alternating speakers → exactly 4 + 4.
+  const eight = makeDraft();
+  eight.turns = eight.turns.slice(0, 8);
+  assert.deepEqual(validateReeTalkDraft(eight).filter((issue) => issue.severity === "error"), []);
+
+  // Eight turns but split 5 + 3: the per-speaker floor still applies.
+  const lopsided = makeDraft();
+  lopsided.turns = lopsided.turns.slice(0, 8).map((turn, index) => ({
+    ...turn,
+    speakerId: index < 5 ? "sp-ana" : "sp-ben",
+  }));
+  const lopsidedIssues = validateReeTalkDraft(lopsided);
+  assert.ok(lopsidedIssues.some((issue) => issue.message.includes('"sp-ben" has 3 turns; at least 4')));
+  assert.ok(!lopsidedIssues.some((issue) => issue.message.includes("8–120 turns")));
+
+  const tooMany = makeDraft();
+  const template = tooMany.turns[0];
+  tooMany.turns = Array.from({ length: 121 }, (_, index) => ({
+    ...template,
+    id: `turn-${index + 1}`,
+    speakerId: index % 2 === 0 ? "sp-ana" : "sp-ben",
+  }));
+  assert.ok(validateReeTalkDraft(tooMany).some((issue) => issue.message.includes("found 121")));
+});
+
+test("the authored reetalk-docs scenario en-t01-s01 (8 turns) validates and imports", () => {
+  // Byte-for-byte copy of reetalk-docs `سناریو/انگلیسی/01 - معرفی و آشنایی/01 - اولین سلام سارا و امیر.json`;
+  // it used to fail with "a dialogue needs 10–120 turns, found 8".
+  const source = path.join(repo, "tests", "fixtures", "reetalk-en-t01-s01.json");
+  const draft = JSON.parse(fs.readFileSync(source, "utf8")) as ReetalkDraft;
+  assert.equal(draft.turns.length, 8);
+  assert.deepEqual(validateReeTalkDraft(draft), []);
+
+  // Import exactly as the operator does: the file keeps its plain `.json` name.
+  const target = path.join(workspace, "01 - اولین سلام سارا و امیر.json");
+  fs.copyFileSync(source, target);
+  const result = importDraftFile(target);
+  assert.equal(result.songId, "en-t01-s01");
+  const detail = getProjectDetail(result.projectId);
+  assert.equal(detail.summary.kind, "reetalk");
+  assert.equal(detail.summary.lineCount, 8);
+  assert.equal(detail.summary.state, "raw-imported");
 });
 
 test("importing the draft creates a separate ReeTalk project", () => {

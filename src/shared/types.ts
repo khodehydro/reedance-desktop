@@ -405,7 +405,7 @@ export interface ReetalkDraft {
   objective: ReetalkLocalized;
   /** Exactly two speakers. */
   speakers: ReetalkSpeaker[];
-  /** 10–120 turns, at least 5 per speaker, array order is conversation order. */
+  /** 8–120 turns, at least 4 per speaker, array order is conversation order. */
   turns: ReetalkTurn[];
   learning: ReetalkLearning;
 }
