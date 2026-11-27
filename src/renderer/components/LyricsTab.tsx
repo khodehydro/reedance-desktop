@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import type { DraftContent, Token } from "@shared/types";
+import { alternateLineLanguage, type DraftContent, type Token } from "@shared/types";
 import { useLang } from "../i18n";
+import { LINE_LANGUAGE_CODES, languageName } from "../lineLanguage";
+import { PlaySegment } from "./SegmentAudio";
 import { Badge, Button, Callout, Field, Mono, Select, Section, TextArea, TextInput, useToast } from "./ui";
 import type { UpdateContent } from "./ProjectPage";
 
@@ -14,7 +16,7 @@ function nextLineId(content: DraftContent): string {
 }
 
 export function LyricsTab({ content, update }: { content: DraftContent; update: UpdateContent }): React.ReactElement {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const toast = useToast();
   const [openTokens, setOpenTokens] = useState<string | null>(content.lyrics[0]?.id ?? null);
   const lexemes = content.vocabulary.map((word) => ({ value: word.lexemeId, label: `${word.lemma} (${word.lexemeId})` }));
@@ -58,6 +60,52 @@ export function LyricsTab({ content, update }: { content: DraftContent; update: 
     });
   };
 
+  /**
+   * Mark a line as sung in another language. Such a line keeps its text and
+   * translations but is not taught: its tokens lose their lexemes and cards /
+   * questions that point to it are unlinked.
+   */
+  const setLineLanguage = (lineId: string, code: string): void => {
+    const foreign = !!code && code !== content.targetLanguage;
+    let unlinked = 0;
+    update((draft) => {
+      const target = draft.lyrics.find((line) => line.id === lineId);
+      if (!target) return;
+      if (!foreign) {
+        delete target.language;
+        return;
+      }
+      target.language = code;
+      for (const token of target.tokens) {
+        if (token.lexemeId) {
+          delete token.lexemeId;
+          unlinked += 1;
+        }
+      }
+      for (const item of [...draft.idioms, ...draft.sentences, ...draft.questions]) {
+        if (item.lineId === lineId) {
+          item.lineId = undefined;
+          unlinked += 1;
+        }
+      }
+      for (const item of draft.grammar) {
+        if (item.lineIds?.includes(lineId)) {
+          item.lineIds = item.lineIds.filter((id) => id !== lineId);
+          unlinked += 1;
+        }
+      }
+    });
+    if (foreign && unlinked > 0) {
+      toast.push(
+        t(
+          `این سطر به زبان دیگری است و آموزش داده نمی‌شود؛ ${unlinked} ارجاع آموزشی از آن برداشته شد.`,
+          `This line is in another language and is not taught; ${unlinked} learning link(s) were removed.`,
+        ),
+        "info",
+      );
+    }
+  };
+
   const splitIntoTokens = (lineId: string): void => {
     const line = content.lyrics.find((candidate) => candidate.id === lineId);
     if (!line) return;
@@ -88,12 +136,19 @@ export function LyricsTab({ content, update }: { content: DraftContent; update: 
         <div className="line-editor-list">
           {content.lyrics.map((line, index) => {
             const open = openTokens === line.id;
+            const foreign = alternateLineLanguage(content.targetLanguage, line);
             return (
-              <article key={line.id} className="line-editor">
+              <article key={line.id} className={`line-editor${foreign ? " is-foreign" : ""}`}>
                 <header>
                   <div className="row gap-sm">
+                    <PlaySegment playKey={`line:${line.id}`} ids={[line.id]} compact />
                     <Badge tone="muted">{index + 1}</Badge>
                     <Mono>{line.id}</Mono>
+                    {foreign ? (
+                      <span className="lang-badge" title={t("این سطر آموزش داده نمی‌شود", "This line is not taught")}>
+                        {languageName(foreign, lang)} · {t("بدون آموزش", "not taught")}
+                      </span>
+                    ) : null}
                     <Badge tone={line.text ? "info" : "warn"}>
                       {line.tokens.length} {t("توکن", "tokens")}
                     </Badge>
@@ -114,6 +169,28 @@ export function LyricsTab({ content, update }: { content: DraftContent; update: 
                   </div>
                 </header>
                 <div className="form-grid">
+                  <Field
+                    label={t("زبان سطر", "line language")}
+                    hint={t(
+                      "اگر این سطر به زبانی غیر از زبان آهنگ است، انتخاب کنید: با بج زبان نمایش داده می‌شود و آموزش داده نمی‌شود.",
+                      "Pick a language when this line is not in the song language: it shows a language badge and is not taught.",
+                    )}
+                  >
+                    <Select
+                      value={line.language && line.language !== content.targetLanguage ? line.language : ""}
+                      onChange={(value) => setLineLanguage(line.id, value)}
+                      options={[
+                        { value: "", label: `${languageName(content.targetLanguage, lang)} — ${t("زبان آهنگ", "song language")}` },
+                        ...(line.language && !(LINE_LANGUAGE_CODES as readonly string[]).includes(line.language) && line.language !== content.targetLanguage
+                          ? [{ value: line.language, label: `${languageName(line.language, lang)} (${line.language})` }]
+                          : []),
+                        ...LINE_LANGUAGE_CODES.filter((code) => code !== content.targetLanguage).map((code) => ({
+                          value: code,
+                          label: `${languageName(code, lang)} (${code})`,
+                        })),
+                      ]}
+                    />
+                  </Field>
                   <Field label={t("متن سطر", "line text")} wide>
                     <TextInput
                       value={line.text}
@@ -187,6 +264,7 @@ export function LyricsTab({ content, update }: { content: DraftContent; update: 
                             key={`${line.id}-${tokenIndex}`}
                             token={token}
                             lexemes={lexemes}
+                            noTeach={!!foreign}
                             onChange={(patch) =>
                               update((draft) => {
                                 const target = draft.lyrics[index]?.tokens[tokenIndex];
@@ -223,11 +301,14 @@ export function LyricsTab({ content, update }: { content: DraftContent; update: 
 function TokenRow({
   token,
   lexemes,
+  noTeach,
   onChange,
   onRemove,
 }: {
   token: Token;
   lexemes: { value: string; label: string }[];
+  /** Foreign-language line: tokens keep their glosses but get no lexeme. */
+  noTeach?: boolean;
   onChange: (patch: Partial<Token>) => void;
   onRemove: () => void;
 }): React.ReactElement {
@@ -240,7 +321,8 @@ function TokenRow({
       <Select
         value={token.lexemeId ?? ""}
         onChange={(value) => onChange({ lexemeId: value ? value : undefined })}
-        options={[{ value: "", label: t("— بدون واژه —", "— no lexeme —") }, ...lexemes]}
+        disabled={noTeach}
+        options={[{ value: "", label: noTeach ? t("— زبان دیگر، بدون واژه —", "— other language, no lexeme —") : t("— بدون واژه —", "— no lexeme —") }, ...lexemes]}
       />
       <Button size="sm" variant="ghost" onClick={onRemove} title="remove">
         ✕

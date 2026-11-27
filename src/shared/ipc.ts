@@ -18,6 +18,7 @@ export const CH = {
   projectCreate: "project:create",
   projectGet: "project:get",
   projectSaveContent: "project:save-content",
+  projectReplaceDraft: "project:replace-draft",
   projectSaveRights: "project:save-rights",
   projectRemove: "project:remove",
 

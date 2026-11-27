@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import { SUPPORTED_LANGUAGES, isTargetLanguage, type DraftContent, type ImportOutcome, type Issue, type Level, type ReetalkDraft, type TargetLanguage } from "../shared/types";
+import { SUPPORTED_LANGUAGES, isTargetLanguage, type DraftContent, type ImportOutcome, type Issue, type ReplaceDraftOutcome, type Level, type ReetalkDraft, type TargetLanguage } from "../shared/types";
 import { audit, flushNow } from "./db";
 import { readFileLimited } from "./paths";
-import { createProject, saveRawSnapshot } from "./projects";
+import { createProject, replaceProjectDraft, saveRawSnapshot } from "./projects";
 import { isReeTalkDraft, validateReeTalkDraft } from "./reetalk";
 import { sha256Hex } from "./util";
 import {
@@ -27,7 +27,15 @@ const DRAFT_MAX_BYTES = 4 * 1024 * 1024;
  * of that is a local project created; the original bytes are kept as an
  * immutable snapshot.
  */
-export function importDraftFile(filePath: string): ImportOutcome {
+export type ParsedDraft =
+  | { kind: "reetalk"; draft: ReetalkDraft; bytes: Buffer; sha: string; warnings: Issue[] }
+  | { kind: "song"; draft: DraftContent; bytes: Buffer; sha: string; warnings: Issue[] };
+
+/**
+ * Read + fully validate a draft file without touching the database. Shared by
+ * the first import and by "replace JSON" on an existing project.
+ */
+export function parseDraftFile(filePath: string): ParsedDraft {
   const bytes = readFileLimited(filePath, DRAFT_MAX_BYTES);
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
     throw new Error("draft starts with a UTF-8 BOM; save it as UTF-8 without BOM");
@@ -56,19 +64,7 @@ export function importDraftFile(filePath: string): ImportOutcome {
     if (errors.length) {
       throw new Error(`ReeTalk draft failed validation: ${formatIssues(errors.slice(0, 6))}`);
     }
-    const draft = parsed as ReetalkDraft;
-    const snapshotPath = saveRawSnapshot(sha, bytes);
-    const projectId = createProject({ draft, rawPath: snapshotPath, rawSha256: sha });
-    audit(projectId, "raw-snapshot-stored", "system", { rawPath: snapshotPath, rawSha256: sha });
-    audit(projectId, "reetalk-draft-imported", "operator", { dialogueId: draft.dialogueId, turns: draft.turns.length });
-    flushNow();
-    return {
-      projectId,
-      songId: draft.dialogueId,
-      title: draft.title.fa,
-      issues: [],
-      warnings: [],
-    };
+    return { kind: "reetalk", draft: parsed as ReetalkDraft, bytes, sha, warnings: issues.filter((issue) => issue.severity === "warning") };
   }
 
   const structural = validateDraftStructure(parsed);
@@ -81,18 +77,33 @@ export function importDraftFile(filePath: string): ImportOutcome {
   if (errors.length) {
     throw new Error(`draft has blocking content errors: ${formatIssues(errors.slice(0, 6))}`);
   }
-  const warnings: Issue[] = semantic.filter((issue) => issue.severity === "warning");
-  const snapshotPath = saveRawSnapshot(sha, bytes);
-  const projectId = createProject({ draft, rawPath: snapshotPath, rawSha256: sha });
-  audit(projectId, "raw-snapshot-stored", "system", { rawPath: snapshotPath, rawSha256: sha });
+  return { kind: "song", draft, bytes, sha, warnings: semantic.filter((issue) => issue.severity === "warning") };
+}
+
+export function importDraftFile(filePath: string): ImportOutcome {
+  const parsed = parseDraftFile(filePath);
+  const snapshotPath = saveRawSnapshot(parsed.sha, parsed.bytes);
+  const projectId = createProject({ draft: parsed.draft, rawPath: snapshotPath, rawSha256: parsed.sha });
+  audit(projectId, "raw-snapshot-stored", "system", { rawPath: snapshotPath, rawSha256: parsed.sha });
+  if (parsed.kind === "reetalk") {
+    audit(projectId, "reetalk-draft-imported", "operator", { dialogueId: parsed.draft.dialogueId, turns: parsed.draft.turns.length });
+  }
   flushNow();
-  return {
-    projectId,
-    songId: draft.songId,
-    title: draft.title,
-    issues: [],
-    warnings,
-  };
+  return parsed.kind === "reetalk"
+    ? { projectId, songId: parsed.draft.dialogueId, title: parsed.draft.title.fa, issues: [], warnings: parsed.warnings }
+    : { projectId, songId: parsed.draft.songId, title: parsed.draft.title, issues: [], warnings: parsed.warnings };
+}
+
+/**
+ * Replace the content of an existing project with a new draft file (same id,
+ * same language, same profile). Audio, cover and the timings of every line or
+ * turn whose id survives are kept; the next export gets a new version.
+ */
+export function replaceDraftFile(projectId: string, filePath: string): ReplaceDraftOutcome {
+  const parsed = parseDraftFile(filePath);
+  const snapshotPath = saveRawSnapshot(parsed.sha, parsed.bytes);
+  const outcome = replaceProjectDraft(projectId, parsed.draft, { rawPath: snapshotPath, rawSha256: parsed.sha });
+  return { ...outcome, warnings: parsed.warnings.length };
 }
 
 const SONG_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

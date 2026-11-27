@@ -9,7 +9,7 @@ import { verifyManifest } from "../src/main/crypto/sign";
 import { readZipStrict, ZIP_MAX_TOTAL } from "../src/main/crypto/zip";
 import { closeDatabase, openDatabase } from "../src/main/db";
 import { runQuickExport, verifyExport } from "../src/main/exporter";
-import { importDraftFile } from "../src/main/import";
+import { importDraftFile, replaceDraftFile } from "../src/main/import";
 import { ensureStudioKeys, getAesKey, getSigningPublicKey } from "../src/main/keys";
 import { COVER_LIMITS, coverDimensions, importAudio, importCover, withMeasuredDuration } from "../src/main/media";
 import {
@@ -255,10 +255,28 @@ test("importing the draft creates a separate ReeTalk project", () => {
   assert.ok(fs.existsSync(detail.rawJsonPath), "the original draft bytes are snapshotted");
 });
 
-test("ReeTalk content cannot be edited in the studio", () => {
-  // The guard runs on the stored content before touching the payload, so any
-  // payload shape must still be rejected for a ReeTalk project.
-  assert.throws(() => saveContent(projectId, {} as never), /cannot be edited/);
+test("ReeTalk content is editable in the studio, identity stays fixed", () => {
+  // A song payload (or junk) can never overwrite a dialogue.
+  assert.throws(() => saveContent(projectId, {} as never), /ReeTalk dialogue/);
+  const original = getProjectDetail(projectId).content as ReetalkDraft;
+  const renamed = structuredClone(original);
+  renamed.dialogueId = "another-dialogue";
+  assert.throws(() => saveContent(projectId, renamed), /dialogueId is immutable/);
+
+  // Edit a card and link it to the turns it comes from.
+  const edited = structuredClone(original);
+  edited.learning.words[0].meaning.fa = "سلام (ویرایش‌شده)";
+  edited.learning.words[0].evidenceTurnIds = [edited.turns[0].id];
+  edited.learning.grammar[0].evidenceTurnIds = [edited.turns[1].id, edited.turns[2].id];
+  const saved = saveContent(projectId, edited).content as ReetalkDraft;
+  assert.equal(saved.learning.words[0].meaning.fa, "سلام (ویرایش‌شده)");
+  assert.deepEqual(saved.learning.grammar[0].evidenceTurnIds, [edited.turns[1].id, edited.turns[2].id]);
+  assert.deepEqual(validateReeTalkDraft(saved).filter((issue) => issue.severity === "error"), []);
+
+  // A link to a turn that does not exist is a content error (export gate).
+  const broken = structuredClone(saved);
+  broken.learning.phrases[0].evidenceTurnIds = ["no-such-turn"];
+  assert.ok(validateReeTalkDraft(broken).some((issue) => issue.path === "$.learning.phrases[0].evidenceTurnIds[0]"));
 });
 
 test("marks only accept dialogue turn ids", () => {
@@ -352,6 +370,14 @@ test("an exportable ReeTalk pack holds exactly dialogue.json + audio + cover", (
   );
 
   const dialogue = JSON.parse(zip.files["dialogue.json"].toString("utf8")) as ReetalkDialogue;
+  assert.deepEqual(
+    dialogue.learning.grammar[0].evidenceTurnIds,
+    [dialogue.turns[1].id, dialogue.turns[2].id],
+    "card → turn links travel in dialogue.json (Android ignores unknown keys until it plays them)",
+  );
+  for (const card of [...dialogue.learning.words, ...dialogue.learning.grammar, ...dialogue.learning.phrases]) {
+    assert.ok(card.evidenceTurnIds === undefined || card.evidenceTurnIds.length > 0, "an empty card evidence list is never published");
+  }
   assert.equal(dialogue.schemaVersion, 1);
   assert.equal(dialogue.dialogueId, "greeting-dialogue");
   assert.equal(dialogue.contentVersionCode, 1);
@@ -415,6 +441,37 @@ test("a recorded end that overlaps the next turn locks the export", () => {
     detail.content,
   );
   assert.equal(preflight(projectId).canExport, true);
+});
+
+test("replacing the JSON keeps audio, cover and timings; the next export gets a new version", () => {
+  const before = getProjectDetail(projectId);
+  const timedBefore = before.marks.filter((mark) => mark.startMs !== null).length;
+  const latest = before.exports.reduce((max, item) => Math.max(max, item.versionCode), 0);
+  const next = structuredClone(before.content as ReetalkDraft);
+  next.turns[1].translation.fa = "ترجمهٔ تازه";
+  next.objective.en = "Updated objective";
+  const file = path.join(workspace, "updated.reetalkdraft.json");
+  fs.writeFileSync(file, JSON.stringify(next, null, 2));
+
+  const outcome = replaceDraftFile(projectId, file);
+  assert.equal(outcome.total, next.turns.length);
+  assert.equal(outcome.changed, 1, "one turn changed text/translation");
+  assert.equal(outcome.added, 0);
+  assert.equal(outcome.removed, 0);
+  assert.equal(outcome.timingsKept, timedBefore, "every surviving turn keeps its timing");
+  assert.equal(outcome.nextVersionCode, latest + 1);
+  assert.equal(outcome.detail.media?.audioSha256, before.media?.audioSha256, "audio untouched");
+  assert.equal(outcome.detail.media?.coverSha256, before.media?.coverSha256, "cover untouched");
+  assert.equal((outcome.detail.content as ReetalkDraft).objective.en, "Updated objective");
+  assert.notEqual(outcome.detail.rawSha256, before.rawSha256, "the new file becomes the project's raw snapshot");
+  assert.equal(preflight(projectId).canExport, true);
+
+  // Same profile and id only.
+  const renamed = structuredClone(next);
+  renamed.dialogueId = "other-dialogue";
+  fs.writeFileSync(file, JSON.stringify(renamed));
+  assert.throws(() => replaceDraftFile(projectId, file), /dialogueId is immutable/);
+  assert.throws(() => replaceDraftFile(projectId, path.join(fixtures, "quiet-step.rddraft.json")), /song draft cannot replace/);
 });
 
 test("statistics count a ReeTalk project without crashing on missing song fields", () => {

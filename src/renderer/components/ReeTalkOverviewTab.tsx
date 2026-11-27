@@ -100,8 +100,8 @@ export function ReeTalkOverviewTab({
       <Section
         title={t("شناسنامهٔ مکالمه", "Dialogue identity")}
         description={t(
-          "این مقادیر از پیش‌نویس محتوا می‌آیند و داخل dialogue.json بستهٔ نهایی می‌روند؛ در استودیو فقط‌خواندنی‌اند.",
-          "These values come from the content agent's draft and ship inside dialogue.json; they are read-only here.",
+          "این مقادیر داخل dialogue.json بستهٔ نهایی می‌روند. متن‌ها را در زبانه‌های «گفت‌وگو» و «آموزش» ویرایش کنید یا با «جایگزینی JSON» نسخهٔ تازه را بارگذاری کنید؛ شناسه و زبان ثابت می‌مانند.",
+          "These values ship inside dialogue.json. Edit texts in the Dialogue and Learning tabs, or load an updated file with Replace JSON; the id and language stay fixed.",
         )}
       >
         <KeyValue
@@ -180,8 +180,8 @@ export function ReeTalkOverviewTab({
       <Section
         title={t("بلوک‌های یادگیری", "Learning blocks")}
         description={t(
-          "خلاصهٔ محتوای آموزشی مکالمه؛ ویرایش در استودیو انجام نمی‌شود.",
-          "Summary of the dialogue's learning content; it is not edited in the studio.",
+          "خلاصهٔ محتوای آموزشی مکالمه؛ برای ویرایش به زبانهٔ «آموزش و سؤال» بروید.",
+          "Summary of the dialogue's learning content; edit it in the Learning & questions tab.",
         )}
       >
         <div className="stat-grid">

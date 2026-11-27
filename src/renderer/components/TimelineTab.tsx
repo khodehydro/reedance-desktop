@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DraftContent, ProjectDetail } from "@shared/types";
+import { alternateLineLanguage, type DraftContent, type ProjectDetail } from "@shared/types";
+import { languageName } from "../lineLanguage";
 import { isBlockingProblem, problemLabel, resolveTimings, type ResolvedTiming } from "@shared/timing";
 import { api } from "../api";
 import { useLang } from "../i18n";
@@ -25,6 +26,8 @@ export interface TimelineLine {
   translationFa?: string;
   badge?: string;
   tone?: 0 | 1;
+  /** Song line in another language: `badge` is the language name, the line is not taught. */
+  foreign?: boolean;
 }
 
 type MarkMap = Record<string, MarkDraft>;
@@ -78,13 +81,18 @@ export function TimelineTab({
   const lyricLines: TimelineLine[] = useMemo(
     () =>
       lines ??
-      (content?.lyrics ?? []).map((line) => ({
-        id: line.id,
-        text: line.text,
-        translationEn: line.translationEn,
-        translationFa: line.translationFa,
-      })),
-    [lines, content],
+      (content?.lyrics ?? []).map((line) => {
+        const foreign = alternateLineLanguage(content?.targetLanguage ?? "", line);
+        return {
+          id: line.id,
+          text: line.text,
+          translationEn: line.translationEn,
+          translationFa: line.translationFa,
+          badge: foreign ? languageName(foreign, lang) : undefined,
+          foreign: !!foreign,
+        };
+      }),
+    [lines, content, lang],
   );
   const lineIds = useMemo(() => lyricLines.map((line) => line.id), [lyricLines]);
 
@@ -498,6 +506,7 @@ export function TimelineTab({
             number: timing.index + 1,
             text: line?.text ?? "",
             badge: line?.badge,
+            foreign: line?.foreign,
             startMs: timing.startMs,
             endMs: Math.max(timing.endMs, timing.startMs + 1),
             endDerived: timing.endSource !== "recorded",
@@ -726,7 +735,7 @@ export function TimelineTab({
             <span className="capture-index">
               {t("سطر", "Line")} {selectedIndex + 1}/{lyricLines.length}
             </span>
-            {selectedLine?.badge && <span className={`speaker-chip tone-${selectedLine.tone ?? 0}`}>{selectedLine.badge}</span>}
+            {selectedLine?.badge && <span className={selectedLine.foreign ? "lang-badge" : `speaker-chip tone-${selectedLine.tone ?? 0}`}>{selectedLine.badge}</span>}
             <span className={`placement-chip${selectedPlaced ? " is-placed" : ""}`}>
               {selectedPlaced ? t("روی تایم‌لاین · قابل ویرایش", "on the timeline · editable") : t("هنوز روی تایم‌لاین نیست", "not on the timeline yet")}
             </span>
@@ -936,7 +945,7 @@ const BinRow = memo(function BinRow({
       <span className="line-number">{index + 1}</span>
       <span className="line-body">
         <span className="line-text" dir="ltr">
-          {line.badge && <span className={`speaker-chip tone-${line.tone ?? 0}`}>{line.badge}</span>}
+          {line.badge && <span className={line.foreign ? "lang-badge" : `speaker-chip tone-${line.tone ?? 0}`}>{line.badge}</span>}
           {line.text || <em className="muted">—</em>}
         </span>
         {problems.length > 0 && (

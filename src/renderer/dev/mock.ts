@@ -747,6 +747,8 @@ export function createMockBridge(): StudioApi {
         rights = { ...rights, ...next };
         return detail();
       },
+      // No file picker in the browser preview.
+      replaceDraft: async () => null,
       remove: async () => undefined,
     },
     media: {

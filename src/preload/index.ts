@@ -40,6 +40,7 @@ const api: StudioApi = {
     createEmpty: (input) => ipcRenderer.invoke(CH.projectCreate, input),
     get: (projectId) => ipcRenderer.invoke(CH.projectGet, projectId),
     saveContent: (projectId, content) => ipcRenderer.invoke(CH.projectSaveContent, projectId, content),
+    replaceDraft: (projectId) => ipcRenderer.invoke(CH.projectReplaceDraft, projectId),
     saveRights: (projectId, rights) => ipcRenderer.invoke(CH.projectSaveRights, projectId, rights),
     remove: (projectId) => ipcRenderer.invoke(CH.projectRemove, projectId),
   },

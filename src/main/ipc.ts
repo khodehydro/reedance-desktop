@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electro
 import type {
   AppInfo,
   DraftContent,
+  ProjectContent,
   RightsChecklist,
   Settings,
   StatsScope,
@@ -15,7 +16,7 @@ import { CH } from "../shared/ipc";
 import { all, audit, flushNow } from "./db";
 import { rescanArchive, stageExport } from "./archive";
 import { runExport, runQuickExport, verifyExportReport } from "./exporter";
-import { createEmptyDraft, importDraftFile } from "./import";
+import { createEmptyDraft, importDraftFile, replaceDraftFile } from "./import";
 import { ensureStudioKeys } from "./keys";
 import { COVER_LIMITS, importAudio, importCover, importStoryAudio, reconcileDecodedDuration } from "./media";
 import { publishExport } from "./publication";
@@ -224,9 +225,22 @@ export function registerIpc(): void {
   ipcMain.handle(CH.projectGet, (_event, projectId: unknown) => getProjectDetail(id(projectId, "projectId")));
 
   ipcMain.handle(CH.projectSaveContent, (_event, projectId: unknown, content: unknown) => {
-    const detail = saveContent(id(projectId, "projectId"), obj(content, "content") as unknown as DraftContent);
+    const detail = saveContent(id(projectId, "projectId"), obj(content, "content") as unknown as ProjectContent);
     notifyChanged();
     return detail;
+  });
+
+  ipcMain.handle(CH.projectReplaceDraft, async (_event, projectId: unknown) => {
+    const project = id(projectId, "projectId");
+    const file = await pickFile(
+      [{ name: "Reedance / ReeTalk draft", extensions: ["json"] }],
+      "Replace the project JSON (same id) — audio, cover and timings are kept",
+    );
+    if (!file) return null;
+    if (fs.statSync(file).size > DRAFT_MAX) throw new Error("draft is larger than 4 MiB");
+    const outcome = replaceDraftFile(project, file);
+    notifyChanged();
+    return outcome;
   });
 
   ipcMain.handle(CH.projectSaveRights, (_event, projectId: unknown, rights: unknown) => {

@@ -9,7 +9,7 @@ import { verifyManifest } from "../src/main/crypto/sign";
 import { readZipStrict } from "../src/main/crypto/zip";
 import { closeDatabase, openDatabase } from "../src/main/db";
 import { runExport, runQuickExport, verifyExport } from "../src/main/exporter";
-import { importDraftFile } from "../src/main/import";
+import { importDraftFile, replaceDraftFile } from "../src/main/import";
 import { PACK_KEY_ID, SIGNING_KEY_ID, getAesKey, getSigningPublicKey, listKeys } from "../src/main/keys";
 import { importAudio, withMeasuredDuration } from "../src/main/media";
 import {
@@ -330,6 +330,54 @@ test("one-click export needs nothing from the operator: keys and version are aut
   const next = runQuickExport(projectId, {}, { archiveRoot });
   const nextRow = getProjectDetail(projectId).exports.find((item) => item.exportId === next.exportId);
   assert.equal(nextRow?.encryptionKeyId, row?.encryptionKeyId, "the studio key is reused, not regenerated");
+});
+
+test("replacing the song JSON keeps audio and surviving timings, and bumps the next version", () => {
+  const before = getProjectDetail(projectId);
+  const latest = before.exports.reduce((max, item) => Math.max(max, item.versionCode), 0);
+  const next = structuredClone(before.content as DraftContent);
+  next.lyrics[0].translationFa = "ترجمهٔ ویرایش‌شده";
+  next.lyrics.push({
+    id: "line-3",
+    language: "es",
+    text: "hola amigo",
+    translationFa: "سلام دوست",
+    translationEn: "hello friend",
+    tokens: [
+      { surface: "hola", translationFa: "سلام", translationEn: "hello" },
+      { surface: "amigo", translationFa: "دوست", translationEn: "friend" },
+    ],
+  });
+  const file = path.join(workspace, "quiet-step.v2.rddraft.json");
+  fs.writeFileSync(file, JSON.stringify(next, null, 2));
+  const outcome = replaceDraftFile(projectId, file);
+  assert.equal(outcome.total, 3);
+  assert.equal(outcome.added, 1, "the new line still needs timing");
+  assert.equal(outcome.changed, 1, "the edited line keeps its timing but needs review");
+  assert.equal(outcome.timingsKept, 2);
+  assert.equal(outcome.nextVersionCode, latest + 1, "the next export is a new version");
+  assert.equal(outcome.detail.media?.audioSha256, before.media?.audioSha256);
+  assert.equal((outcome.detail.content as DraftContent).lyrics[2].language, "es");
+  assert.equal(outcome.detail.preflight.canExport, false, "the added line must be timed first");
+
+  // Another songId is refused: replace is for a new version of the same song.
+  fs.writeFileSync(file, JSON.stringify({ ...next, songId: "other-song" }));
+  assert.throws(() => replaceDraftFile(projectId, file), /songId is immutable/);
+
+  // Time the new line and export it: Android receives lyrics[2].language = "es".
+  saveMarks(
+    projectId,
+    [
+      { lineId: "line-1", startMs: 0, endMs: null },
+      { lineId: "line-2", startMs: 1500, endMs: null },
+      { lineId: "line-3", startMs: 3000, endMs: null },
+    ],
+    audio,
+    outcome.detail.content,
+  );
+  const exported = runQuickExport(projectId, {}, { archiveRoot });
+  assert.equal(exported.versionCode, latest + 1);
+  assert.equal(verifyExport(exported.exportId).verified, true);
 });
 
 test("replacing the audio clears every mark and the approval", () => {

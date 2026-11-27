@@ -81,8 +81,11 @@ export function assembleLesson(input: {
       const next = content.lyrics[index + 1];
       const nextStart = next ? byLine.get(next.id)?.startMs ?? null : null;
       const endMs = mark.endMs ?? nextStart ?? Math.round(media.durationMs);
+      // Only a real alternate language is published (same-as-song = omitted).
+      const language = line.language && line.language !== content.targetLanguage ? line.language : undefined;
       return {
         id: line.id,
+        ...(language ? { language } : {}),
         startMs: mark.startMs,
         endMs,
         text: line.text,
@@ -106,7 +109,8 @@ export function assembleLesson(input: {
         }
       : {}),
     vocabulary: content.vocabulary,
-    grammar: content.grammar,
+    // `lineIds` is a studio-only link (card → song playback), not lesson v1.
+    grammar: content.grammar.map(({ lineIds: _lineIds, ...item }) => item),
     idioms: content.idioms,
     sentences: content.sentences,
     vocabularyTables: content.vocabularyTables,

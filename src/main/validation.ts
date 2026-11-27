@@ -62,8 +62,7 @@ function extendContractLanguages(schema: Record<string, unknown>): Record<string
   return schema;
 }
 
-function ensureAjv(): void {
-  if (ajv) return;
+function newAjv(): Ajv2020 {
   const instance = new Ajv2020({
     allErrors: true,
     strict: false,
@@ -71,13 +70,44 @@ function ensureAjv(): void {
     validateFormats: true,
   });
   addFormats(instance);
+  return instance;
+}
+
+/**
+ * Authoring-only fields the draft may carry on top of lesson v1. They link a
+ * card to the song for playback in the studio and are stripped by
+ * `assembleLesson`, so the published lesson.json stays exactly v1.
+ */
+export function extendDraftOnlyFields(lessonSchema: Record<string, unknown>): Record<string, unknown> {
+  const defs = lessonSchema.$defs as Record<string, { properties?: Record<string, unknown> }>;
+  const grammar = defs?.grammarItem;
+  if (grammar?.properties) {
+    grammar.properties.lineIds = {
+      type: "array",
+      maxItems: 20,
+      uniqueItems: true,
+      items: { $ref: "#/$defs/id" },
+      description: "Studio-only: lyric lines this grammar card explains (played from the card). Not in lesson.json v1.",
+    };
+  }
+  return lessonSchema;
+}
+
+function ensureAjv(): void {
+  if (ajv) return;
+  // Published lesson: the pinned v1 contract, nothing more.
+  const lessonInstance = newAjv();
   const lessonSchema = extendContractLanguages(loadSchema("lesson.schema.json"));
+  lessonInstance.addSchema(lessonSchema, "urn:reedance:lesson:v1");
+  lessonValidator = lessonInstance.getSchema("urn:reedance:lesson:v1") ?? lessonInstance.compile(lessonSchema);
+  // Draft: same definitions plus the authoring-only link fields.
+  const draftInstance = newAjv();
+  const draftLesson = extendDraftOnlyFields(extendContractLanguages(loadSchema("lesson.schema.json")));
   const draftSchema = extendContractLanguages(loadSchema("draft.schema.json"));
-  instance.addSchema(lessonSchema, "urn:reedance:lesson:v1");
-  instance.addSchema(draftSchema, "urn:reedance:draft:v1");
-  lessonValidator = instance.getSchema("urn:reedance:lesson:v1") ?? instance.compile(lessonSchema);
-  draftValidator = instance.getSchema("urn:reedance:draft:v1") ?? instance.compile(draftSchema);
-  ajv = instance;
+  draftInstance.addSchema(draftLesson, "urn:reedance:lesson:v1");
+  draftInstance.addSchema(draftSchema, "urn:reedance:draft:v1");
+  draftValidator = draftInstance.getSchema("urn:reedance:draft:v1") ?? draftInstance.compile(draftSchema);
+  ajv = lessonInstance;
 }
 
 function ajvIssues(errors: ErrorObject[] | null | undefined, root: string): Issue[] {
@@ -155,6 +185,32 @@ export function validateContentSemantics(content: DraftContent): Issue[] {
   issues.push(...duplicateIds("idioms", content.idioms));
   issues.push(...duplicateIds("sentences", content.sentences));
   issues.push(...duplicateIds("questions", content.questions));
+
+  // Lines sung in another language are shown with a badge and never taught.
+  const foreignLines = new Map<string, string>();
+  content.lyrics.forEach((line, index) => {
+    if (line.language !== undefined) {
+      if (typeof line.language !== "string" || !/^[a-z]{2,3}$/.test(line.language)) {
+        issues.push({ path: `lyrics[${index}].language`, message: "language must be a 2–3 letter lowercase ISO code", severity: "error" });
+      } else if (line.language === lang) {
+        issues.push({
+          path: `lyrics[${index}].language`,
+          message: `language "${line.language}" equals the song language; omit the field`,
+          severity: "warning",
+        });
+      } else {
+        foreignLines.set(line.id, line.language);
+      }
+    }
+  });
+  const foreignLink = (path: string, lineId: string | undefined, what: string): void => {
+    if (!lineId || !foreignLines.has(lineId)) return;
+    issues.push({
+      path,
+      message: `${what} points to line "${lineId}", which is in another language (${foreignLines.get(lineId)}) and must not be taught`,
+      severity: "error",
+    });
+  };
 
   content.lyrics.forEach((line, index) => {
     if (!ID_RE.test(line.id)) {
@@ -236,6 +292,13 @@ export function validateContentSemantics(content: DraftContent): Issue[] {
   content.lyrics.forEach((line, lineIndex) => {
     line.tokens.forEach((token, tokenIndex) => {
       if (!token.lexemeId) return;
+      if (foreignLines.has(line.id)) {
+        issues.push({
+          path: `lyrics[${lineIndex}].tokens[${tokenIndex}].lexemeId`,
+          message: `line is in another language (${foreignLines.get(line.id)}): its words are not taught, remove the lexemeId`,
+          severity: "error",
+        });
+      }
       if (!lexemeIds.has(token.lexemeId)) {
         issues.push({
           path: `lyrics[${lineIndex}].tokens[${tokenIndex}].lexemeId`,
@@ -254,6 +317,12 @@ export function validateContentSemantics(content: DraftContent): Issue[] {
       issues.push({ path: `grammar[${index}].conceptId`, message: `conceptId prefix must be "${lang}:"`, severity: "error" });
     }
     (item.tables ?? []).forEach((table, tableIndex) => validateTable(table, `grammar[${index}].tables[${tableIndex}]`, issues));
+    (item.lineIds ?? []).forEach((lineId, linkIndex) => {
+      if (!lineIds.has(lineId)) {
+        issues.push({ path: `grammar[${index}].lineIds[${linkIndex}]`, message: `unknown line "${lineId}"`, severity: "error" });
+      }
+      foreignLink(`grammar[${index}].lineIds[${linkIndex}]`, lineId, "grammar card");
+    });
   });
 
   content.vocabularyTables.forEach((table, index) => validateTable(table, `vocabularyTables[${index}]`, issues));
@@ -267,11 +336,13 @@ export function validateContentSemantics(content: DraftContent): Issue[] {
       if (phrase.lineId && !lineIds.has(phrase.lineId)) {
         issues.push({ path: `${prefix}[${index}].lineId`, message: `unknown line "${phrase.lineId}"`, severity: "error" });
       }
+      foreignLink(`${prefix}[${index}].lineId`, phrase.lineId, prefix === "idioms" ? "idiom" : "sentence");
     });
   }
 
   content.questions.forEach((question, index) => {
     issues.push(...validateQuestion(question, `questions[${index}]`, lineIds, lexemeIds));
+    foreignLink(`questions[${index}].lineId`, question.lineId, "question");
   });
 
   if (content.idAliases) {

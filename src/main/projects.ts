@@ -19,6 +19,7 @@ import {
   type ProjectSummary,
   type ReetalkDialogue,
   type ReetalkDraft,
+  type ReplaceDraftOutcome,
   type RightsChecklist,
   type TargetLanguage,
 } from "../shared/types";
@@ -333,8 +334,8 @@ export function nextVersionCode(songId: string): number {
 
 function projectIssues(row: ProjectRow, content: ProjectContent, media: MediaInfo | null): { errors: Issue[]; warnings: Issue[] } {
   if (isReeTalkContent(content)) {
-    // ReeTalk content is imported once and never edited in the studio, so the
-    // full contract validation runs here as the single source of truth.
+    // ReeTalk content is editable in the studio: the full contract validation
+    // runs here as the single source of truth for the export gate.
     const issues = validateReeTalkDraft(content);
     const errors = issues.filter((issue) => issue.severity === "error");
     const warnings = issues.filter((issue) => issue.severity === "warning");
@@ -780,54 +781,135 @@ function invalidateApproval(projectId: string, reason: string): void {
   audit(projectId, "approval-invalidated", "system", { reason });
 }
 
-export function saveContent(projectId: string, content: DraftContent): ProjectDetail {
-  const row = loadProject(projectId);
-  if (isReeTalkContent(readProjectContent(row))) {
-    // ReeTalk content arrives validated from the content agent and is synced,
-    // not edited, in the studio — a separate project profile by design.
-    throw new Error("ReeTalk dialogue content cannot be edited in the studio; re-import the draft instead");
-  }
-  const previous = readContent(row);
-  if (!content || typeof content !== "object") throw new Error("content must be an object");
-  if (content.songId !== previous.songId) throw new Error("songId is immutable");
-  if (content.targetLanguage !== previous.targetLanguage) throw new Error("targetLanguage is immutable for a songId");
-  if (!Array.isArray(content.lyrics) || content.lyrics.length === 0) throw new Error("a project needs at least one lyric line");
+interface ContentDiff {
+  total: number;
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
 
-  const previousShas = new Map(previous.lyrics.map((line) => [line.id, lineHash(line)]));
-  const changedLines = content.lyrics
-    .filter((line) => previousShas.get(line.id) !== lineHash(line))
-    .map((line) => line.id);
-  const removedLines = previous.lyrics.filter((line) => !content.lyrics.some((line) => line.id === line.id)).map((line) => line.id);
-  const nextContentHash = contentHash(content);
+/** Line (song) or turn (ReeTalk) diff by id + review hash. */
+function diffUnits(previous: ProjectContent, next: ProjectContent): ContentDiff {
+  const units = (content: ProjectContent): Map<string, string> =>
+    isReeTalkContent(content)
+      ? new Map(content.turns.map((turn) => [turn.id, turnHash(turn)]))
+      : new Map(content.lyrics.map((line) => [line.id, lineHash(line)]));
+  const before = units(previous);
+  const after = units(next);
+  const added: string[] = [];
+  const changed: string[] = [];
+  for (const [id, hash] of after) {
+    if (!before.has(id)) added.push(id);
+    else if (before.get(id) !== hash) changed.push(id);
+  }
+  const removed = [...before.keys()].filter((id) => !after.has(id));
+  return { total: after.size, added, removed, changed };
+}
+
+/** Identity rules shared by editing and replacing: same profile, id and language. */
+function assertSameIdentity(previous: ProjectContent, next: ProjectContent): void {
+  if (!next || typeof next !== "object") throw new Error("content must be an object");
+  if (isReeTalkContent(previous) !== isReeTalkContent(next)) {
+    throw new Error(
+      isReeTalkContent(previous)
+        ? "this project is a ReeTalk dialogue; a song draft cannot replace it / این پروژه ری‌تاک است و فایل آهنگ جایگزینش نمی‌شود"
+        : "this project is a song; a ReeTalk draft cannot replace it / این پروژه آهنگ است و فایل ری‌تاک جایگزینش نمی‌شود",
+    );
+  }
+  if (isReeTalkContent(previous) && isReeTalkContent(next)) {
+    if (next.dialogueId !== previous.dialogueId) {
+      throw new Error(`dialogueId is immutable ("${previous.dialogueId}" ≠ "${next.dialogueId}") / شناسهٔ دیالوگ نباید عوض شود`);
+    }
+    if (next.targetLanguage !== previous.targetLanguage) throw new Error("targetLanguage is immutable for a dialogueId");
+    if (!Array.isArray(next.turns) || next.turns.length === 0) throw new Error("a dialogue needs at least one turn");
+    return;
+  }
+  const song = next as DraftContent;
+  const before = previous as DraftContent;
+  if (song.songId !== before.songId) throw new Error(`songId is immutable ("${before.songId}" ≠ "${song.songId}") / شناسهٔ آهنگ نباید عوض شود`);
+  if (song.targetLanguage !== before.targetLanguage) throw new Error("targetLanguage is immutable for a songId");
+  if (!Array.isArray(song.lyrics) || song.lyrics.length === 0) throw new Error("a project needs at least one lyric line");
+}
+
+/**
+ * Write new content, keeping timings of every surviving line/turn id:
+ * removed ids lose their mark, changed ids keep the timing but need review
+ * again, and any real change invalidates the approval.
+ */
+function applyContent(
+  projectId: string,
+  next: ProjectContent,
+  raw: { rawPath: string; rawSha256: string } | null,
+): ContentDiff {
+  const row = loadProject(projectId);
+  const previous = readProjectContent(row);
+  assertSameIdentity(previous, next);
+  const diff = diffUnits(previous, next);
+  const nextContentHash = contentHash(next);
+  const title = isReeTalkContent(next) ? next.title?.fa ?? "" : next.title;
+  const artist = isReeTalkContent(next) ? "" : next.artist ?? "";
 
   transaction(() => {
-    run("UPDATE projects SET content_json = ?, content_hash = ?, updated_at = ? WHERE project_id = ?", [
-      JSON.stringify(content),
-      nextContentHash,
-      nowIso(),
-      projectId,
-    ]);
-    run("UPDATE songs SET title = ?, artist = ? WHERE song_id = ?", [
-      content.title,
-      content.artist ?? "",
-      row.song_id,
-    ]);
-    for (const lineId of [...changedLines, ...removedLines]) {
+    if (raw) {
+      run(
+        `UPDATE projects SET content_json = ?, draft_json = ?, content_hash = ?, raw_json_path = ?, raw_sha256 = ?, updated_at = ?
+          WHERE project_id = ?`,
+        [JSON.stringify(next), JSON.stringify(next), nextContentHash, raw.rawPath, raw.rawSha256, nowIso(), projectId],
+      );
+    } else {
+      run("UPDATE projects SET content_json = ?, content_hash = ?, updated_at = ? WHERE project_id = ?", [
+        JSON.stringify(next),
+        nextContentHash,
+        nowIso(),
+        projectId,
+      ]);
+    }
+    run("UPDATE songs SET title = ?, artist = ? WHERE song_id = ?", [title, artist, row.song_id]);
+    for (const lineId of [...diff.changed, ...diff.removed]) {
       run("UPDATE lyric_marks SET reviewed_audio_sha = NULL, reviewed_line_sha = NULL WHERE project_id = ? AND line_id = ?", [
         projectId,
         lineId,
       ]);
     }
-    for (const lineId of removedLines) {
+    for (const lineId of diff.removed) {
       run("DELETE FROM lyric_marks WHERE project_id = ? AND line_id = ?", [projectId, lineId]);
     }
-    if (changedLines.length || removedLines.length) {
-      invalidateApproval(projectId, "content changed");
-    }
-    audit(projectId, "content-saved", "operator", { changedLines: changedLines.length, removedLines: removedLines.length });
+    if (nextContentHash !== row.content_hash) invalidateApproval(projectId, raw ? "draft replaced" : "content changed");
+    audit(projectId, raw ? "draft-replaced" : "content-saved", "operator", {
+      changedLines: diff.changed.length,
+      removedLines: diff.removed.length,
+      addedLines: diff.added.length,
+      ...(raw ? { rawSha256: raw.rawSha256 } : {}),
+    });
   });
   refreshState(projectId);
+  return diff;
+}
+
+export function saveContent(projectId: string, content: ProjectContent): ProjectDetail {
+  applyContent(projectId, content, null);
   return getProjectDetail(projectId);
+}
+
+/** Replace the project's draft with a newly imported file (see import.ts). */
+export function replaceProjectDraft(
+  projectId: string,
+  draft: ProjectContent,
+  raw: { rawPath: string; rawSha256: string },
+): Omit<ReplaceDraftOutcome, "warnings"> {
+  const diff = applyContent(projectId, draft, raw);
+  flushNow();
+  const detail = getProjectDetail(projectId);
+  const timingsKept = detail.marks.filter((mark) => mark.startMs !== null).length;
+  return {
+    detail,
+    total: diff.total,
+    added: diff.added.length,
+    removed: diff.removed.length,
+    changed: diff.changed.length,
+    timingsKept,
+    nextVersionCode: detail.preflight.nextVersionCode,
+  };
 }
 
 export function saveRights(projectId: string, rights: RightsChecklist): ProjectDetail {

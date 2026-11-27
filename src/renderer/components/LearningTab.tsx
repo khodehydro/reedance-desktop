@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { DraftContent, GrammarItem, LearningTable, Phrase, Tone, Word } from "@shared/types";
 import { useLang } from "../i18n";
+import { PlaySegment, UnitLinker } from "./SegmentAudio";
 import { Badge, Button, Callout, Field, Mono, Section, Select, Tabs, TextArea, TextInput } from "./ui";
 import type { UpdateContent } from "./ProjectPage";
 
@@ -270,6 +271,7 @@ function VocabularyEditor({ content, update }: { content: DraftContent; update: 
             <WordCard
               key={word.lexemeId + index}
               word={word}
+              heardIn={content.lyrics.filter((line) => line.tokens.some((token) => token.lexemeId === word.lexemeId)).map((line) => line.id)}
               onChange={(next) =>
                 update((draft) => {
                   draft.vocabulary[index] = next;
@@ -288,15 +290,32 @@ function VocabularyEditor({ content, update }: { content: DraftContent; update: 
   );
 }
 
-function WordCard({ word, onChange, onRemove }: { word: Word; onChange: (word: Word) => void; onRemove: () => void }): React.ReactElement {
+function WordCard({
+  word,
+  heardIn,
+  onChange,
+  onRemove,
+}: {
+  word: Word;
+  /** Lines whose tokens point at this lexeme — what ▶ plays (Android derives the same). */
+  heardIn: string[];
+  onChange: (word: Word) => void;
+  onRemove: () => void;
+}): React.ReactElement {
   const { t } = useLang();
   const patch = (next: Partial<Word>): void => onChange({ ...word, ...next });
   return (
     <article className="card">
       <header>
         <div className="row gap-sm">
+          <PlaySegment playKey={`word:${word.lexemeId}`} ids={heardIn} />
           <Badge tone="info">{word.lemma || "—"}</Badge>
           <Mono>{word.lexemeId}</Mono>
+          <span className="tiny muted">
+            {heardIn.length
+              ? t(`در ${heardIn.length} سطر (از توکن‌ها)`, `in ${heardIn.length} line(s) (from tokens)`)
+              : t("هیچ توکنی به این واژه وصل نیست", "no token links to this word")}
+          </span>
         </div>
         <div className="row gap-sm">
           <Button
@@ -462,6 +481,7 @@ function GrammarCard({ item, onChange, onRemove }: { item: GrammarItem; onChange
     <article className="card">
       <header>
         <div className="row gap-sm">
+          <PlaySegment playKey={`grammar:${item.id}`} ids={item.lineIds ?? []} />
           <Badge tone="info">{item.titleFa || item.titleEn || "—"}</Badge>
           <Mono>{item.id}</Mono>
         </div>
@@ -469,6 +489,12 @@ function GrammarCard({ item, onChange, onRemove }: { item: GrammarItem; onChange
           {t("حذف", "Remove")}
         </Button>
       </header>
+      <UnitLinker
+        multiple
+        value={item.lineIds ?? []}
+        onChange={(ids) => patch({ lineIds: ids.length ? ids : undefined })}
+        label={t("سطرهایی که این نکته در آن‌ها شنیده می‌شود (فقط برای پخش در استودیو)", "Lines where this is heard (studio playback only)")}
+      />
       <div className="form-grid">
         <Field label="id">
           <TextInput value={item.id} mono dir="ltr" onChange={(value) => patch({ id: value })} />
@@ -636,7 +662,6 @@ function PhraseEditor({ content, update }: { content: DraftContent; update: Upda
             <PhraseCard
               key={phrase.id + index}
               phrase={phrase}
-              lineIds={content.lyrics.map((line) => line.id)}
               onChange={(next) =>
                 update((draft) => {
                   draft[kind][index] = next;
@@ -664,12 +689,10 @@ function PhraseEditor({ content, update }: { content: DraftContent; update: Upda
 
 function PhraseCard({
   phrase,
-  lineIds,
   onChange,
   onRemove,
 }: {
   phrase: Phrase;
-  lineIds: string[];
   onChange: (phrase: Phrase) => void;
   onRemove: () => void;
 }): React.ReactElement {
@@ -679,6 +702,7 @@ function PhraseCard({
     <article className="card">
       <header>
         <div className="row gap-sm">
+          <PlaySegment playKey={`phrase:${phrase.id}`} ids={phrase.lineId ? [phrase.lineId] : []} />
           <Badge tone="info">{phrase.text || "—"}</Badge>
           <Mono>{phrase.id}</Mono>
         </div>
@@ -690,13 +714,13 @@ function PhraseCard({
         <Field label="id">
           <TextInput value={phrase.id} mono dir="ltr" onChange={(value) => patch({ id: value })} />
         </Field>
-        <Field label="lineId" hint={t("ارجاع اختیاری به سطر", "optional line reference")}>
-          <Select
-            value={phrase.lineId ?? ""}
-            onChange={(value) => patch({ lineId: value || undefined })}
-            options={[{ value: "", label: "—" }, ...lineIds.map((id) => ({ value: id, label: id }))]}
+        <div className="field field-wide">
+          <UnitLinker
+            value={phrase.lineId ? [phrase.lineId] : []}
+            onChange={(ids) => patch({ lineId: ids[0] })}
+            label={t("سطر مربوط (lineId) — پخش ▶ از همین سطر", "Linked line (lineId) — ▶ plays this line")}
           />
-        </Field>
+        </div>
         <Field label={t("متن", "text")} wide>
           <TextInput value={phrase.text} dir="ltr" onChange={(value) => patch({ text: value })} />
         </Field>

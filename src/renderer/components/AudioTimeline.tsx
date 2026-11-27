@@ -29,6 +29,8 @@ export interface TimelineClip {
   number: number;
   text: string;
   badge?: string;
+  /** Sung in another language than the song: the badge is a language badge. */
+  foreign?: boolean;
   startMs: number;
   /** Effective end as exported (recorded or automatic). */
   endMs: number;
@@ -1185,6 +1187,7 @@ const ClipLayer = memo(function ClipLayer({
         const classes = [
           "tl-clip",
           `tone-${clip.tone}`,
+          clip.foreign ? "is-foreign" : "",
           clip.selected ? "is-selected" : "is-locked",
           clip.problem ? "has-problem" : "",
           live.endDerived ? "is-derived-end" : "",
@@ -1204,7 +1207,7 @@ const ClipLayer = memo(function ClipLayer({
           >
             <span className="tl-clip-label">
               <b>{clip.number}</b>
-              {pixels >= 60 && clip.badge ? <i>{clip.badge}</i> : null}
+              {pixels >= 60 && clip.badge ? <i className={clip.foreign ? "lang-chip" : undefined}>{clip.badge}</i> : null}
               {pixels >= 80 ? <span>{clip.text}</span> : null}
             </span>
             {clip.selected && left >= -6 && (

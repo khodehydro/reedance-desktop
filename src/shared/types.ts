@@ -63,10 +63,23 @@ export interface Token {
 
 export interface LyricLine {
   id: string;
+  /**
+   * Optional ISO code (`^[a-z]{2,3}$`) for a line sung in another language than
+   * the song (e.g. `en` in an `es` song). Android shows it as a language badge;
+   * the studio keeps such a line out of the lesson (no lexemes, no links from
+   * cards or questions). Omitted = inherits `targetLanguage`.
+   */
+  language?: string;
   text: string;
   translationFa: string;
   translationEn: string;
   tokens: Token[];
+}
+
+/** The line's language when it differs from the song language, else null. */
+export function alternateLineLanguage(songLanguage: string, line: { language?: string }): string | null {
+  const code = line.language;
+  return code && /^[a-z]{2,3}$/.test(code) && code !== songLanguage ? code : null;
 }
 
 /**
@@ -179,6 +192,11 @@ export interface GrammarItem {
   takeawayFa?: string;
   takeawayEn?: string;
   check?: GrammarCheck;
+  /**
+   * Studio link to the lyric line(s) the card explains, used to play that part
+   * of the song. Draft-only: not part of lesson.json v1, stripped at export.
+   */
+  lineIds?: string[];
 }
 
 export interface Phrase {
@@ -339,6 +357,8 @@ export interface ReetalkWord {
   pronunciation: { faReading: string; ipa: string };
   meaning: ReetalkLocalized;
   example: { text: string; translation: ReetalkLocalized };
+  /** Turns where the word is heard; the card plays them like a question's evidence. */
+  evidenceTurnIds?: string[];
 }
 
 /** A table cell is target-language text ({text}) or a localized pair ({fa,en}). */
@@ -357,6 +377,7 @@ export interface ReetalkGrammar {
   example: { text: string; translation: ReetalkLocalized };
   takeaway: ReetalkLocalized;
   tables: ReetalkTable[];
+  evidenceTurnIds?: string[];
 }
 
 export interface ReetalkPhrase {
@@ -366,6 +387,7 @@ export interface ReetalkPhrase {
   meaning: ReetalkLocalized;
   context: ReetalkLocalized;
   example: { text: string; translation: ReetalkLocalized };
+  evidenceTurnIds?: string[];
 }
 
 export interface ReetalkOption {
@@ -724,6 +746,20 @@ export interface ImportOutcome {
   warnings: Issue[];
 }
 
+/** Result of replacing a project's JSON with a new draft file. */
+export interface ReplaceDraftOutcome {
+  detail: ProjectDetail;
+  /** Lines (song) or turns (ReeTalk) in the new draft. */
+  total: number;
+  added: number;
+  removed: number;
+  /** Same id, different text/translation/tokens: timing kept, review reset. */
+  changed: number;
+  timingsKept: number;
+  nextVersionCode: number;
+  warnings: number;
+}
+
 export interface MediaOutcome {
   media: MediaInfo;
   warnings: Issue[];
@@ -888,7 +924,9 @@ export interface StudioApi {
       level: Level;
     }): Promise<ImportOutcome>;
     get(projectId: string): Promise<ProjectDetail>;
-    saveContent(projectId: string, content: DraftContent): Promise<ProjectDetail>;
+    saveContent(projectId: string, content: ProjectContent): Promise<ProjectDetail>;
+    /** Pick a new draft file for this project (same id + profile); null when cancelled. */
+    replaceDraft(projectId: string): Promise<ReplaceDraftOutcome | null>;
     saveRights(projectId: string, rights: RightsChecklist): Promise<ProjectDetail>;
     remove(projectId: string): Promise<void>;
   };

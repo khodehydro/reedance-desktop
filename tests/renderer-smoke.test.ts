@@ -65,6 +65,8 @@ async function boot(url: string) {
     matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
     createObjectURL: () => "blob:mock",
     revokeObjectURL: () => undefined,
+    // Chromium/Electron has it; jsdom's window does not (the editors clone drafts with it).
+    structuredClone: (value: unknown) => structuredClone(value),
   };
   for (const [key, value] of Object.entries(stubs)) {
     if (!(key in window)) (window as unknown as Record<string, unknown>)[key] = value;
@@ -269,6 +271,12 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
   assert.ok(window.document.querySelector(".phone .ph-lyrics"), "the simulator renders the phone lyric player");
   assert.ok(window.document.querySelectorAll(".ph-lyric").length > 0, "the simulator lists the lyric lines");
   assert.ok(/آمادگی خروجی|Export readiness/.test(window.document.body.textContent ?? ""), "the simulator shows export readiness");
+  const cardsPill = Array.from(doc.querySelectorAll(".ph-pill")).find((element) => (element.textContent ?? "").includes("کارت‌ها")) as unknown as HTMLElement;
+  assert.ok(cardsPill, "the song simulator has a Cards page");
+  cardsPill.click();
+  await wait(60);
+  assert.ok(doc.querySelectorAll(".ph-learning .ph-card").length > 0, "song learning cards render in the simulator");
+  assert.ok(Array.from(doc.querySelectorAll(".ph-evidence")).some((button) => /شنیدن در آهنگ/.test(button.textContent ?? "")), "cards linked to timed lines can play their part of the song");
 
   // The story tab must mount its story-audio timeline once a story audio is
   // added: same waveform/transport/capture-line toolkit as the lyric timeline.
@@ -299,6 +307,20 @@ test("the renderer mounts the app shell, splash and library in a browser-like en
     (tab as unknown as HTMLElement).click();
     await new Promise((resolve) => setTimeout(resolve, 160));
   }
+  // Every song card can play its part of the song; line links use the line picker.
+  const learningTab = Array.from(doc.querySelectorAll(".tab")).find((element) => (element.textContent ?? "").includes("آموزش")) as unknown as HTMLElement;
+  learningTab.click();
+  await wait(120);
+  assert.ok(doc.querySelectorAll(".card .seg-play").length > 0, "vocabulary cards have a ▶ button");
+  const lyricsTab = Array.from(doc.querySelectorAll(".tab")).find((element) => (element.textContent ?? "").includes("متن و واژه")) as unknown as HTMLElement;
+  lyricsTab.click();
+  await wait(120);
+  assert.ok(/زبان سطر|line language/.test(doc.body.textContent ?? ""), "each lyric line has a language selector");
+  const reviewTab = Array.from(doc.querySelectorAll(".tab")).find((element) => (element.textContent ?? "").includes("خروجی")) as unknown as HTMLElement;
+  reviewTab.click();
+  await wait(160);
+  assert.ok(/جایگزینی JSON|Replace JSON/.test(doc.body.textContent ?? ""), "the project header offers Replace JSON");
+
   const reviewText = window.document.body.textContent ?? "";
   assert.ok(/دریافت فایل خروجی|Get the output file/.test(reviewText), "the one-click export button renders");
   assert.ok(window.document.querySelector(".export-hero"), "the export panel explains readiness");
@@ -365,5 +387,30 @@ test("the Android simulator renders a ReeTalk scenario as the chat screen", asyn
   pill("چت").click();
   await wait(80);
   assert.ok(doc.querySelector(".ph-chat"), "returning to chat works");
+
+  // ReeTalk content is editable after import: dialogue + learning editors.
+  const projectTab = (label: string) => Array.from(doc.querySelectorAll(".tab")).find((element) => (element.textContent ?? "").includes(label)) as unknown as HTMLElement;
+  assert.ok(projectTab("گفت‌وگو و نوبت‌ها"), "ReeTalk projects get a dialogue editor");
+  projectTab("گفت‌وگو و نوبت‌ها").click();
+  await wait(150);
+  const turns = doc.querySelectorAll(".rt-turn");
+  assert.ok(turns.length >= 8, "every turn is listed for editing");
+  assert.ok(turns[0].querySelector(".seg-play"), "each turn has a ▶ button");
+  const turnText = turns[0].querySelectorAll("input")[0] as unknown as HTMLInputElement;
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+  setter.call(turnText, `${turnText.value} edited`);
+  turnText.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(50);
+  assert.ok(/تغییر ذخیره‌نشده|ذخیره/.test(doc.querySelector(".save-pill")?.textContent ?? ""), "editing a turn marks the project dirty / saving");
+
+  projectTab("آموزش و سؤال").click();
+  await wait(150);
+  assert.ok(doc.querySelectorAll(".rt-card").length > 0, "word cards are editable");
+  assert.ok(doc.querySelector(".rt-card .seg-play"), "every learning card has a ▶ button");
+  assert.ok(doc.querySelector(".rt-card .unit-linker"), "cards pick the turns they are heard in");
+  const questionsTab = Array.from(doc.querySelectorAll(".tab")).find((element) => (element.textContent ?? "").startsWith("سؤالات")) as unknown as HTMLElement;
+  questionsTab.click();
+  await wait(100);
+  assert.ok(doc.querySelectorAll(".rt-option").length >= 2, "question options are editable");
   assert.deepEqual(errors, [], errors.join("; "));
 });

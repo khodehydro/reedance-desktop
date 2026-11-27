@@ -18,6 +18,8 @@ import {
 } from "@shared/timing";
 import { api } from "../api";
 import { useLang } from "../i18n";
+import { languageName } from "../lineLanguage";
+import { alternateLineLanguage } from "@shared/types";
 import { formatMs } from "../format";
 import { Badge, Button } from "./ui";
 
@@ -244,6 +246,24 @@ function marksRecord(detail: ProjectDetail): Record<string, { startMs: number | 
   const map: Record<string, { startMs: number | null; endMs: number | null }> = {};
   for (const mark of detail.marks) map[mark.lineId] = { startMs: mark.startMs, endMs: mark.endMs };
   return map;
+}
+
+/** Earliest start → latest end of the given units (the Android evidence rule). */
+function unitRange(ids: readonly string[] | undefined, timings: readonly ResolvedTiming[]): { startMs: number; endMs: number } | null {
+  if (!ids?.length) return null;
+  const wanted = new Set(ids);
+  const ranges = timings.filter((timing) => wanted.has(timing.id) && timing.startMs !== null && timing.endMs !== null);
+  if (ranges.length === 0) return null;
+  return { startMs: Math.min(...ranges.map((range) => range.startMs as number)), endMs: Math.max(...ranges.map((range) => range.endMs as number)) };
+}
+
+function HearButton({ range, label, onPlay }: { range: { startMs: number; endMs: number } | null; label: string; onPlay: (startMs: number, endMs: number) => void }): React.ReactElement | null {
+  if (!range) return null;
+  return (
+    <button type="button" className="ph-evidence" onClick={() => onPlay(range.startMs, range.endMs)} title={`${formatMs(range.startMs)} → ${formatMs(range.endMs)}`}>
+      ▶ {label}
+    </button>
+  );
 }
 
 function PhoneFrame({ children, style, dark }: { children: React.ReactNode; style?: React.CSSProperties; dark: boolean }): React.ReactElement {
@@ -488,11 +508,10 @@ function ReeTalkSimulator({ detail, draft, timings }: { detail: ProjectDetail; d
   };
 
   const playEvidence = (question: ReetalkQuestion): void => {
-    const indexes = question.evidenceTurnIds.map((id) => draft.turns.findIndex((turn) => turn.id === id)).filter((index) => index >= 0);
-    const ranges = indexes.map((index) => timings[index]).filter((timing) => timing.startMs !== null && timing.endMs !== null);
-    if (ranges.length === 0) return;
-    player.playRange(Math.min(...ranges.map((range) => range.startMs as number)), Math.max(...ranges.map((range) => range.endMs as number)));
+    const range = unitRange(question.evidenceTurnIds, timings);
+    if (range) player.playRange(range.startMs, range.endMs);
   };
+  const hearLabel = t("شنیدن در مکالمه", "Hear it in the dialogue");
 
   const tabs = [t("چت", "Chat"), t("لغات", "Words"), t("گرامر", "Grammar"), t("اصطلاحات", "Phrases"), t("سؤالات", "Questions")];
   const visibleTurns = draft.turns.slice(0, revealed).map((turn, index) => ({ turn, index }));
@@ -665,6 +684,7 @@ function ReeTalkSimulator({ detail, draft, timings }: { detail: ProjectDetail; d
                   <div className="ph-reading">{word.pronunciation.faReading}</div>
                   <div>{word.meaning.fa}</div>
                   <Example text={word.example.text} fa={word.example.translation.fa} />
+                  <HearButton range={unitRange(word.evidenceTurnIds, timings)} label={hearLabel} onPlay={player.playRange} />
                 </article>
               ))}
             {tab === 2 &&
@@ -677,6 +697,7 @@ function ReeTalkSimulator({ detail, draft, timings }: { detail: ProjectDetail; d
                     <PhoneTable key={index} table={table} />
                   ))}
                   <div className="ph-takeaway">💡 {grammar.takeaway.fa}</div>
+                  <HearButton range={unitRange(grammar.evidenceTurnIds, timings)} label={hearLabel} onPlay={player.playRange} />
                 </article>
               ))}
             {tab === 3 &&
@@ -690,6 +711,7 @@ function ReeTalkSimulator({ detail, draft, timings }: { detail: ProjectDetail; d
                   <div>{phrase.meaning.fa}</div>
                   <div className="ph-context">{phrase.context.fa}</div>
                   <Example text={phrase.example.text} fa={phrase.example.translation.fa} />
+                  <HearButton range={unitRange(phrase.evidenceTurnIds, timings)} label={hearLabel} onPlay={player.playRange} />
                 </article>
               ))}
             {tab === 4 &&
@@ -809,7 +831,7 @@ function QuestionCard({ question, onEvidence }: { question: ReetalkQuestion; onE
 /* ================================================================== */
 
 function SongSimulator({ detail, draft, timings }: { detail: ProjectDetail; draft: DraftContent; timings: ResolvedTiming[] }): React.ReactElement {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const coverUrl = useCoverUrl(detail);
   const player = usePlayer(detail.summary.projectId, detail.media?.durationMs ?? 0);
   const [mode, setMode] = useState(0);
@@ -839,16 +861,20 @@ function SongSimulator({ detail, draft, timings }: { detail: ProjectDetail; draf
           </div>
         </div>
         <div className="ph-pills">
-          {[t("متن اصلی", "Original"), t("ترجمهٔ جمله", "Sentence"), t("کلمه‌به‌کلمه", "Word by word")].map((label, index) => (
+          {[t("متن اصلی", "Original"), t("ترجمهٔ جمله", "Sentence"), t("کلمه‌به‌کلمه", "Word by word"), t("کارت‌ها", "Cards")].map((label, index) => (
             <button key={label} type="button" className={`ph-pill${mode === index ? " is-on" : ""}`} onClick={() => setMode(index)}>
               {label}
             </button>
           ))}
         </div>
+        {mode === 3 ? (
+          <SongCards draft={draft} timings={timings} onPlay={player.playRange} />
+        ) : (
         <div className="ph-lyrics" ref={listRef}>
           {draft.lyrics.map((line, index) => {
             const timing = timings[index];
             const playable = timing?.startMs !== null && timing?.endMs !== null;
+            const foreign = alternateLineLanguage(draft.targetLanguage, line);
             return (
               <div key={line.id} data-index={index} className={`ph-lyric${index === active ? " is-active" : ""}${playable ? "" : " is-untimed"}`} dir="ltr">
                 <button
@@ -861,6 +887,7 @@ function SongSimulator({ detail, draft, timings }: { detail: ProjectDetail; draf
                   ▶
                 </button>
                 <div className="ph-lyric-body">
+                  {foreign ? <span className="ph-lang-badge">{languageName(foreign, lang)}</span> : null}
                   <div className="ph-words">
                     {(line.tokens.length > 0 ? line.tokens : [{ surface: line.text, translationFa: "", translationEn: "" }]).map((token, tokenIndex) => (
                       <span key={tokenIndex} className="ph-word">
@@ -883,6 +910,7 @@ function SongSimulator({ detail, draft, timings }: { detail: ProjectDetail; draf
             );
           })}
         </div>
+        )}
         <div className="ph-mini" dir="ltr">
           <button type="button" className="ph-play small" onClick={player.toggle} aria-label={player.playing ? "pause" : "play"}>
             {player.playing ? "❚❚" : "▶"}
@@ -911,6 +939,67 @@ function SongSimulator({ detail, draft, timings }: { detail: ProjectDetail; draf
           {formatMs(player.ms)} / {formatMs(player.durationMs)}
         </span>
       </div>
+    </div>
+  );
+}
+
+/** Learning cards of a song with "hear it in the song" — what each card plays on Android (see docs/interop/CARD_AUDIO_AND_LINE_LANGUAGE.md). */
+function SongCards({
+  draft,
+  timings,
+  onPlay,
+}: {
+  draft: DraftContent;
+  timings: ResolvedTiming[];
+  onPlay: (startMs: number, endMs: number) => void;
+}): React.ReactElement {
+  const { t } = useLang();
+  const hear = t("شنیدن در آهنگ", "Hear it in the song");
+  const linesOf = (lexemeId: string): string[] =>
+    draft.lyrics.filter((line) => line.tokens.some((token) => token.lexemeId === lexemeId)).map((line) => line.id);
+  const one = (lineId?: string): string[] => (lineId ? [lineId] : []);
+  return (
+    <div className="ph-learning">
+      {draft.vocabulary.length > 0 && <div className="ph-section-title">{t("لغات", "Words")}</div>}
+      {draft.vocabulary.map((word) => (
+        <article key={word.lexemeId} className="ph-card">
+          <div className="ph-card-head" dir="ltr">
+            <strong>{word.lemma}</strong>
+            {word.ipa ? <span className="ph-ipa">{word.ipa}</span> : null}
+          </div>
+          {word.faReading ? <div className="ph-reading">{word.faReading}</div> : null}
+          <div>{word.translationFa}</div>
+          <HearButton range={unitRange(linesOf(word.lexemeId), timings)} label={hear} onPlay={onPlay} />
+        </article>
+      ))}
+      {draft.grammar.length > 0 && <div className="ph-section-title">{t("گرامر", "Grammar")}</div>}
+      {draft.grammar.map((item) => (
+        <article key={item.id} className="ph-card">
+          <strong>{item.titleFa}</strong>
+          <p>{item.bodyFa}</p>
+          {item.takeawayFa ? <div className="ph-takeaway">💡 {item.takeawayFa}</div> : null}
+          <HearButton range={unitRange(item.lineIds, timings)} label={hear} onPlay={onPlay} />
+        </article>
+      ))}
+      {draft.idioms.length + draft.sentences.length > 0 && <div className="ph-section-title">{t("اصطلاح‌ها و جمله‌ها", "Idioms & sentences")}</div>}
+      {[...draft.idioms, ...draft.sentences].map((phrase) => (
+        <article key={phrase.id} className="ph-card">
+          <div className="ph-card-head" dir="ltr">
+            <strong>{phrase.text}</strong>
+          </div>
+          <div>{phrase.translationFa}</div>
+          {phrase.contextFa ? <div className="ph-context">{phrase.contextFa}</div> : null}
+          <HearButton range={unitRange(one(phrase.lineId), timings)} label={hear} onPlay={onPlay} />
+        </article>
+      ))}
+      {draft.questions.length > 0 && <div className="ph-section-title">{t("سؤال‌ها", "Questions")}</div>}
+      {draft.questions.map((question) => (
+        <article key={question.id} className="ph-card">
+          <span className="ph-chip">{question.skillFa}</span>
+          <strong className="ph-question">{question.promptFa}</strong>
+          <HearButton range={unitRange(one(question.lineId), timings)} label={hear} onPlay={onPlay} />
+        </article>
+      ))}
     </div>
   );
 }

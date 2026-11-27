@@ -1,4 +1,5 @@
 import React from "react";
+import { alternateLineLanguage } from "@shared/types";
 import type {
   ChoiceQuestion,
   DraftContent,
@@ -8,6 +9,7 @@ import type {
   TypingQuestion,
 } from "@shared/types";
 import { useLang } from "../i18n";
+import { PlaySegment, UnitLinker } from "./SegmentAudio";
 import { Badge, Button, Callout, Field, Mono, Section, Select, TextArea, TextInput } from "./ui";
 import type { UpdateContent } from "./ProjectPage";
 
@@ -37,7 +39,7 @@ function makeQuestion(type: QuestionType, content: DraftContent): Question {
     promptEn: "",
     explanationFa: "",
     explanationEn: "",
-    lineId: content.lyrics[0]?.id,
+    lineId: content.lyrics.find((line) => !alternateLineLanguage(content.targetLanguage, line))?.id,
   };
   if (type === "choice") {
     const question: ChoiceQuestion = {
@@ -161,6 +163,7 @@ function QuestionCard({
     <article className="card">
       <header>
         <div className="row gap-sm">
+          <PlaySegment playKey={`question:${question.id}`} ids={question.lineId ? [question.lineId] : []} />
           <Badge tone="info">{t(TYPE_LABEL[question.type].fa, TYPE_LABEL[question.type].en)}</Badge>
           <Mono>{question.id}</Mono>
         </div>
@@ -173,13 +176,13 @@ function QuestionCard({
         <Field label="id">
           <TextInput value={question.id} mono dir="ltr" onChange={(value) => patch({ id: value })} />
         </Field>
-        <Field label="lineId" hint={t("ارجاع اختیاری", "optional reference")}>
-          <Select
-            value={question.lineId ?? ""}
-            onChange={(value) => patch({ lineId: value || undefined })}
-            options={[{ value: "", label: "—" }, ...content.lyrics.map((line) => ({ value: line.id, label: line.id }))]}
+        <div className="field field-wide">
+          <UnitLinker
+            value={question.lineId ? [question.lineId] : []}
+            onChange={(ids) => patch({ lineId: ids[0] })}
+            label={t("سطر مربوط (lineId) — پخش ▶ از همین سطر", "Linked line (lineId) — ▶ plays this line")}
           />
-        </Field>
+        </div>
         <Field label="skillFa">
           <TextInput value={question.skillFa} dir="rtl" onChange={(value) => patch({ skillFa: value })} />
         </Field>

@@ -22,12 +22,27 @@ ReeTalk pack is deliberately different — exactly `dialogue.json + audio + cove
 (the cover is mandatory and, like every cover, ships byte-for-byte — never resized or recompressed), a `manifestVersion: 2` payload keyed by `dialogueId`,
 and no-overlap timing rules where a recorded turn end is kept as a silence gap
 and a missing end falls back to the next turn's start (last turn: the audio
-duration). ReeTalk content is imported once and never edited in the studio; the
-tabs reduce to overview/audio, timeline and export. A dialogue needs
+duration). ReeTalk content is fully editable after import (Dialogue & turns,
+Learning & questions tabs); the dialogue id, language and speaker ids stay
+fixed. A dialogue needs
 **8–120 turns with at least 4 per speaker** (lowered from the proposal's 10 / 5
 so the authored `reetalk-docs` scenarios — eight turns, four per speaker —
 import unchanged; the Android validator must accept the same floor). Draft
 files may keep a plain `.json` name.
+
+**Replace JSON** (songs and ReeTalk) swaps in an updated draft for the same
+`songId`/`dialogueId` and language, like replacing the audio: media and the
+timings of surviving lines are kept, changed lines lose their review, the
+approval is cleared and the next export gets a new version code.
+
+**Per-line language** — a lyric line sung in another language carries
+`language` (Android `lesson.schema.json`, published only when it differs from
+the song language), shows a language badge and is **never taught** (no token
+lexemes, no card or question may link to it; enforced by validation).
+**Card audio** — every word / grammar / phrase / sentence / question card has a
+▶ that plays its linked lines or turns from the earliest start to the latest
+end; ReeTalk cards gain optional `evidenceTurnIds`. Contract for Android:
+[`docs/interop/CARD_AUDIO_AND_LINE_LANGUAGE.md`](docs/interop/CARD_AUDIO_AND_LINE_LANGUAGE.md).
 
 The UI is Persian-first with a full English switch, RTL, blue/white, ships
 **dark, light and follow-system themes**, and uses

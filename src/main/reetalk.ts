@@ -263,9 +263,27 @@ export function validateReeTalkDraft(value: unknown): Issue[] {
   if (phrases.length < 1) issues.push({ path: "$.learning.phrases", message: "at least one phrase is required", severity: "error" });
   if (questions.length < 1) issues.push({ path: "$.learning.questions", message: "at least one question is required", severity: "error" });
 
+  // Optional card → turn links (played from the card like question evidence).
+  const cardEvidence = (prefix: string, value: unknown): void => {
+    if (value === undefined) return;
+    if (!Array.isArray(value)) {
+      issues.push({ path: `${prefix}.evidenceTurnIds`, message: "evidenceTurnIds must be an array of turn ids", severity: "error" });
+      return;
+    }
+    if (new Set(value).size !== value.length) {
+      issues.push({ path: `${prefix}.evidenceTurnIds`, message: "evidenceTurnIds has duplicates", severity: "error" });
+    }
+    value.forEach((turnId, evidenceIndex) => {
+      if (typeof turnId !== "string" || !turnIds.has(turnId)) {
+        issues.push({ path: `${prefix}.evidenceTurnIds[${evidenceIndex}]`, message: `unknown turn "${String(turnId)}"`, severity: "error" });
+      }
+    });
+  };
+
   duplicateIds("$.learning.words", words, issues);
   words.forEach((word, index) => {
     if (!word || typeof word !== "object") return;
+    cardEvidence(`$.learning.words[${index}]`, word.evidenceTurnIds);
     if (!str(word.text)) issues.push({ path: `$.learning.words[${index}].text`, message: "word text is required", severity: "error" });
     if (!pronunciationOf(word.pronunciation)) {
       issues.push({ path: `$.learning.words[${index}].pronunciation`, message: "pronunciation needs faReading and ipa", severity: "error" });
@@ -281,6 +299,7 @@ export function validateReeTalkDraft(value: unknown): Issue[] {
   duplicateIds("$.learning.grammar", grammar, issues);
   grammar.forEach((card, index) => {
     if (!card || typeof card !== "object") return;
+    cardEvidence(`$.learning.grammar[${index}]`, card.evidenceTurnIds);
     for (const key of ["title", "explanation", "takeaway"] as const) {
       if (!localized(card[key])) {
         issues.push({ path: `$.learning.grammar[${index}].${key}`, message: `${key} needs non-empty fa and en`, severity: "error" });
@@ -299,6 +318,7 @@ export function validateReeTalkDraft(value: unknown): Issue[] {
   duplicateIds("$.learning.phrases", phrases, issues);
   phrases.forEach((phrase, index) => {
     if (!phrase || typeof phrase !== "object") return;
+    cardEvidence(`$.learning.phrases[${index}]`, phrase.evidenceTurnIds);
     if (!str(phrase.text)) issues.push({ path: `$.learning.phrases[${index}].text`, message: "phrase text is required", severity: "error" });
     if (!pronunciationOf(phrase.pronunciation)) {
       issues.push({ path: `$.learning.phrases[${index}].pronunciation`, message: "pronunciation needs faReading and ipa", severity: "error" });
@@ -467,7 +487,7 @@ export function assembleDialogue(input: {
     objective: draft.objective,
     speakers: draft.speakers,
     turns,
-    learning: draft.learning,
+    learning: publishLearning(draft.learning),
     media: {
       audio: {
         path: `audio.${media.extension}` as ReetalkDialogue["media"]["audio"]["path"],
@@ -568,4 +588,23 @@ export function validateReeTalkDialogue(
 /** Every turn id in conversation order (used by preflight gates). */
 export function turnIds(draft: ReetalkDraft): string[] {
   return draft.turns.map((turn: ReetalkTurn) => turn.id);
+}
+
+/**
+ * Card `evidenceTurnIds` (words / grammar / phrases) is optional: an empty
+ * list is not published, so Android sees "no evidence" as an absent key.
+ * Questions always keep theirs (required, non-empty).
+ */
+function publishLearning(learning: ReetalkDraft["learning"]): ReetalkDraft["learning"] {
+  const strip = <T extends { evidenceTurnIds?: string[] }>(card: T): T => {
+    if (card.evidenceTurnIds && card.evidenceTurnIds.length > 0) return card;
+    const { evidenceTurnIds: _unused, ...rest } = card;
+    return rest as T;
+  };
+  return {
+    words: learning.words.map(strip),
+    grammar: learning.grammar.map(strip),
+    phrases: learning.phrases.map(strip),
+    questions: learning.questions,
+  };
 }

@@ -106,6 +106,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["id", "startMs", "text", "translationFa", "translationEn", "tokens"],
       "properties": {
+        "language": { "type": "string", "pattern": "^[a-z]{2,3}$", "description": "Optional ISO language code for this line. Omit to inherit targetLanguage." },
         "id": { "$ref": "#/$defs/id" },
         "startMs": { "type": "integer", "minimum": 0 },
         "endMs": { "type": "integer", "minimum": 1 },
@@ -120,6 +121,7 @@
       "description": "Authoring line supplied by the content agent. No startMs/endMs: Windows must align it to the locally selected audio.",
       "required": ["id", "text", "translationFa", "translationEn", "tokens"],
       "properties": {
+        "language": { "type": "string", "pattern": "^[a-z]{2,3}$", "description": "Optional ISO language code for this line. Omit to inherit targetLanguage." },
         "id": { "$ref": "#/$defs/id" },
         "text": { "$ref": "#/$defs/text" },
         "translationFa": { "$ref": "#/$defs/text" },

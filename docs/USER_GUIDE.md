@@ -33,6 +33,29 @@
 - پنل بازرس: ±۱۰ و ±۱۰۰ میلی‌ثانیه برای هر لبه، تایپ زمان، ⏱ از نوک پخش، «برداشتن از تایم‌لاین» (`Delete`). همهٔ تغییرها با `Ctrl+Z` / `Ctrl+Shift+Z` برمی‌گردند.
 - بزرگ‌نمایی تا ۴۰۰۰ پیکسل در ثانیه (هر پیکسل ربع میلی‌ثانیه) بدون به‌هم‌ریختگی: فقط بخش دیده‌شده رسم می‌شود. نوار کوچک پایین (نمای کل فایل) برای پرش سریع است.
 
+**ویرایش بعد از ورود و جایگزینی JSON (از نسخهٔ 1.0.11):**
+- **آهنگ:** همهٔ بخش‌ها (متن و توکن‌ها، لغات، گرامر، اصطلاح‌ها و جمله‌ها، سؤال‌ها، داستان) بعد از ورود قابل ویرایش‌اند.
+- **ReeTalk:** دو زبانهٔ جدید دارد: **گفت‌وگو و نوبت‌ها** (عنوان، هدف، سطح، نام گوینده‌ها، متن و ترجمهٔ هر نوبت، گوینده، توکن‌ها، افزودن/حذف/جابه‌جایی نوبت) و **آموزش و سؤال** (لغات، گرامر با جدول‌ها، اصطلاحات، سؤال‌ها با مرحله، گزینه‌ها، پاسخ درست و نوبت‌های شاهد). خطاهای هر نوبت یا کارت زیر همان مورد نشان داده می‌شود. شناسهٔ مکالمه، زبان و شناسهٔ گوینده‌ها ثابت می‌مانند.
+- دکمهٔ **⟳ جایگزینی JSON** بالای پروژه مثل جایگزینی صوت کار می‌کند: یک فایل تازه برای **همان** آهنگ/مکالمه انتخاب کنید (همان songId/dialogueId و همان زبان).
+  - صوت و کاور دست‌نخورده می‌مانند و زمانِ سطرهایی که هنوز وجود دارند حفظ می‌شود.
+  - سطرهای تغییرکرده دوباره نیاز به بازبینی دارند و سطرهای جدید باید زمان‌گذاری شوند.
+  - پنجرهٔ نتیجه تعداد سطرهای جدید/تغییرکرده/حذف‌شده و **شمارهٔ نسخهٔ بعدی** را نشان می‌دهد؛ خروجی بعدی همیشه نسخهٔ جدید (latest + 1) می‌گیرد.
+
+**سطرهای زبان دیگر (بج زبان):** اگر بخشی از آهنگ به زبانی غیر از زبان اصلی است (مثلاً یک سطر انگلیسی در آهنگ اسپانیایی)، در زبانهٔ «متن و واژه» برای آن سطر **زبان سطر** را انتخاب کنید.
+- آن سطر در تایم‌لاین، شبیه‌ساز و اپ اندروید با بج نام زبان نمایش داده می‌شود.
+- **آموزش داده نمی‌شود:** توکن‌هایش واژه نمی‌گیرند و هیچ لغت، گرامر، اصطلاح، جمله یا سؤالی نمی‌تواند به آن ارجاع دهد. استودیو این ارجاع‌ها را هنگام انتخاب زبان برمی‌دارد و جلوی اضافه‌کردنشان را می‌گیرد.
+- ترجمهٔ جمله و معنی کلمه‌به‌کلمه حفظ می‌شوند.
+- در فایل JSON همان فیلد `language` روی سطر است (مثل اندروید).
+
+**پخش قسمت مربوط به هر کارت (▶):** هر کارت لغت، گرامر، اصطلاح، جمله و سؤال یک دکمهٔ ▶ دارد. این دکمه از اولین شروع تا آخرین پایانِ سطرها/نوبت‌های مربوط را پخش می‌کند و دقیقاً همان‌جا می‌ایستد، مثل سؤال‌های ReeTalk.
+- **آهنگ:**
+  - لغت ← سطرهایی که توکنشان به آن واژه وصل است؛
+  - اصطلاح، جمله و سؤال ← `lineId`؛
+  - گرامر ← سطرهایی که در کارت انتخاب می‌کنید (فقط برای پخش در استودیو؛ در `lesson.json` نمی‌رود).
+- **ReeTalk:** در هر کارت «نوبت‌های شاهد» را انتخاب کنید (دکمهٔ «پیدا کردن در مکالمه» نوبت‌هایی را که آن کلمه در آن‌ها آمده پیشنهاد می‌دهد). این پیوندها در `dialogue.json` به‌صورت `evidenceTurnIds` می‌روند.
+- در شبیه‌ساز، آهنگ صفحهٔ جدید **کارت‌ها** دارد و کارت‌های ReeTalk دکمهٔ «شنیدن در مکالمه» دارند.
+- قرارداد دقیق برای اپ اندروید: `docs/interop/CARD_AUDIO_AND_LINE_LANGUAGE.md`.
+
 **کاور:** فایل کاور بدون هیچ تغییر اندازه یا فشرده‌سازی، بایت‌به‌بایت در پکیج قرار می‌گیرد. زیر پیش‌نمایش، ابعاد واقعی (مثلاً 1600×1600)، فرمت و حجم نمایش داده می‌شود؛ اگر تصویر منبع کمتر از ۵۱۲ پیکسل باشد هشدار می‌دهد (۱۰۲۴ پیکسل یا بیشتر پیشنهاد می‌شود). حداکثر ابعاد: آهنگ 8192، ReeTalk 4096 پیکسل در هر ضلع.
 
 ## شبیه‌ساز اندروید (پیش از خروجی)
@@ -110,6 +133,33 @@ Keyboard: `Space` play/pause, `M` capture the selected line's start and advance,
 **Lyric sync (1.0.9).** The axis runs **left to right** and the waveform is mapped to the real audio time: the decoder measures the duration and replaces the container value when they differ by more than 250 ms (VBR MP3s, big embedded cover art). There is a single orange **playhead**: listen, and press **Capture line start (M)** at the right moment — the next line is selected automatically. **Capture line end (E)** stamps the end of the line being played. Both big buttons live in the capture dock under the waveform next to the selected line's text. Each table row has **Start** and **End** cells: ⏱ stamps from the playhead, typing a time + Enter sets it, ▶ seeks there. An end you did not record is shown faded/italic — that is exactly what the export fills in (next start; last line: audio end). Problems (missing start, out of order, outside the audio, ReeTalk overlap) are flagged on the row and on the waveform and blocked before saving. Use 0.5×–1× speed for precise syncing, zoom with the buttons or `Ctrl` + wheel (anchored on the cursor), and the A/B loop to repeat a span.
 
 **Clip timeline (1.0.10, CapCut/InShot style)** — songs and ReeTalk alike. Lines start *off* the timeline (dashed in the line list, filter "not on timeline"). Grab a line (⠿) and drop it on the clip track under the waveform; a blue ghost previews the exact spot and turns red when there is no room (`Esc` cancels). The dropped line becomes the **selected** clip (yellow): left handle = start, right handle = end, drag the body to move it with the same length, with a live time readout. Dropping the next line **locks** the previous one (faded, no handles): clicking or dragging over it only moves the playhead, never its timing — reselect it in the list to edit it again. Clips never cross their neighbours; edges snap to the playhead and other clip edges (🧲, hold `Alt` to invert). The inspector offers ±10/±100 ms nudges per edge, typed times, ⏱ from the playhead and *Remove from timeline* (`Delete`); everything is undoable (`Ctrl+Z` / `Ctrl+Shift+Z`). Zoom goes to 4000 px/s (0.25 ms per pixel) without breaking — only the visible span is drawn — and the mini-map under the track jumps anywhere in the file.
+
+**Editing after import and Replace JSON (1.0.11).**
+- **Songs:** every section stays editable after import.
+- **ReeTalk:** two new tabs.
+  - **Dialogue & turns:** title, objective, level, speaker names, and each turn's text, translation, speaker and tokens. Turns can be added, removed and reordered.
+  - **Learning & questions:** words, grammar with tables, phrases, and questions with stage, options, correct answer and evidence turns.
+  - Errors show under the turn or card they belong to.
+- **⟳ Replace JSON** works like replacing the audio. Pick an updated file for the *same* song or dialogue (same id and language).
+  - Audio, cover and the timings of surviving lines are kept.
+  - Changed lines need review again, and new lines need timing.
+  - A summary shows the counts and the **next version number**. The next export always gets latest + 1.
+
+**Lines in another language.** In *Lyrics*, set **line language** on a line that is not in the song language.
+- The line gets a language badge in the timeline, the simulator and on Android.
+- It is **not taught**:
+  - its tokens get no lexeme;
+  - no word, grammar, phrase, sentence or question may point to it;
+  - the studio removes such links when you pick the language and blocks new ones.
+- The sentence translation and word-by-word glosses stay.
+
+**▶ on every card.** Words, grammar, phrases, sentences and questions play from the earliest start to the latest end of their linked lines or turns, the same way ReeTalk question evidence plays.
+- **Song words** use the lines whose tokens carry the lexeme.
+- **Song phrases, sentences and questions** use `lineId`.
+- **Song grammar** uses lines you pick (studio-only, stripped from `lesson.json`).
+- **ReeTalk cards** use evidence turns, exported as `evidenceTurnIds`.
+- In the simulator, songs have a new **Cards** page.
+- Android contract: `docs/interop/CARD_AUDIO_AND_LINE_LANGUAGE.md`.
 
 **Cover.** The cover file is shipped byte-for-byte — no resize, no recompression. The preview shows its real resolution, format and size, and warns when the source is under 512 px (1024 px or more recommended). Maximum side: 8192 px for songs, 4096 px for ReeTalk (the Android installer limits).
 

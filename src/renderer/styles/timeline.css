@@ -1068,3 +1068,15 @@ body.is-dragging-line * {
 [data-theme="light"] .edge-editors {
   background: #f3f7fd;
 }
+
+/* Song lines in another language (not taught): rose clip + language chip. */
+.tl-clip.is-foreign:not(.is-selected) {
+  background-image: repeating-linear-gradient(135deg, rgba(245, 138, 184, 0.22) 0 6px, transparent 6px 12px);
+  border-color: rgba(245, 138, 184, 0.7);
+}
+.tl-clip-label i.lang-chip {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(245, 138, 184, 0.3);
+  color: #ffd2e6;
+}
