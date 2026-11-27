@@ -130,6 +130,20 @@ npm test             # node --import tsx --test tests/*.test.ts
 `npm run dev` in a plain browser uses `src/renderer/dev/mock.ts`; the real
 filesystem, SQLite database and crypto only exist in Electron.
 
+### Checking drafts before import
+
+```bash
+npm run validate:draft -- path/to/drafts --strict   # file or directory, add --json for machine output
+```
+
+Runs the exact checks the studio applies when it imports a draft: schema,
+token reconstruction, lexeme links, foreign lines, questions and forbidden keys.
+`--strict` also blocks on the editorial rules for generated content: no section
+labels, a story of 25+ lines with a matching `<stem>.story.txt`, examples taken
+from outside the song, conjugation tables and lexeme coverage. Use it together
+with the content-agent prompt in
+[`docs/prompts/SONG_DRAFT_AGENT_PROMPT_FA.md`](docs/prompts/SONG_DRAFT_AGENT_PROMPT_FA.md).
+
 ## Package the Windows installer
 
 ```bash
