@@ -50,7 +50,7 @@ test("a foreign-language line is never taught", () => {
   assert.ok(errors(grammar).some((issue) => issue.path === "grammar[0].lineIds[0]" && /unknown line/.test(issue.message)));
 });
 
-test("lesson.json keeps the line language and drops the studio-only grammar links", () => {
+test("lesson.json keeps the line language and publishes grammar links (Android 0.1.1)", () => {
   const draft = withSpanishLine();
   draft.grammar[0].lineIds = ["line-1"];
   assert.deepEqual(validateDraftStructure(draft), [], "grammar lineIds are valid in a draft");
@@ -69,10 +69,30 @@ test("lesson.json keeps the line language and drops the studio-only grammar link
   const lesson = assembleLesson({ content: sameLanguage, marks, media, rights });
   assert.equal(lesson.lyrics[1].language, "es", "the alternate language is published");
   assert.equal("language" in lesson.lyrics[0], false, "a language equal to the song is omitted");
-  assert.equal("lineIds" in lesson.grammar[0], false, "grammar links never reach lesson.json");
-  assert.deepEqual(validateLessonStructure(lesson), [], "the lesson is exactly v1 (Android's strict reader accepts it)");
+  assert.deepEqual(lesson.grammar[0].lineIds, ["line-1"], "grammar links are published for card playback");
+  assert.deepEqual(validateLessonStructure(lesson), [], "the lesson is v1 as Android 0.1.1 reads it");
 
-  const leaked = structuredClone(lesson) as unknown as { grammar: { lineIds?: string[] }[] };
-  leaked.grammar[0].lineIds = ["line-1"];
-  assert.ok(validateLessonStructure(leaked).length > 0, "the lesson schema itself would reject the link");
+  const reordered = structuredClone(sameLanguage);
+  reordered.lyrics[1].language = undefined;
+  reordered.grammar[0].lineIds = ["line-2", "line-1"];
+  const ordered = assembleLesson({ content: reordered, marks, media, rights });
+  assert.deepEqual(ordered.grammar[0].lineIds, ["line-1", "line-2"], "links follow the lyric order");
+
+  const emptied = structuredClone(sameLanguage);
+  emptied.grammar[0].lineIds = [];
+  assert.deepEqual(validateDraftStructure(emptied), [], "an emptied link list is fine while editing");
+  const withoutLinks = assembleLesson({ content: emptied, marks, media, rights });
+  assert.equal("lineIds" in withoutLinks.grammar[0], false, "an empty list never reaches lesson.json");
+  assert.deepEqual(validateLessonStructure(withoutLinks), []);
+
+  const broken = structuredClone(lesson) as unknown as { grammar: { lineIds?: string[] }[] };
+  broken.grammar[0].lineIds = [];
+  assert.ok(validateLessonStructure(broken).length > 0, "the published contract requires 1–50 ids");
+});
+
+test("the vendored lesson schema is Android 0.1.1's file, widened idempotently", () => {
+  const raw = fs.readFileSync(path.join(__dirname, "..", "contracts", "lesson.schema.json"), "utf8");
+  const schema = JSON.parse(raw) as { $defs: Record<string, { pattern?: string; enum?: string[]; properties?: Record<string, unknown> }> };
+  assert.deepEqual(schema.$defs.language.enum, ["en", "es", "ko", "tr"]);
+  assert.ok(schema.$defs.grammarItem.properties?.lineIds, "grammar lineIds is in the contract");
 });

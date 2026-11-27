@@ -193,8 +193,9 @@ export interface GrammarItem {
   takeawayEn?: string;
   check?: GrammarCheck;
   /**
-   * Studio link to the lyric line(s) the card explains, used to play that part
-   * of the song. Draft-only: not part of lesson.json v1, stripped at export.
+   * Lyric line(s) the card explains, used to play that part of the song.
+   * Published in lesson.json since Studio 1.0.12 / Android 0.1.1 (1–50 ids,
+   * lyric order); an empty list stays in the draft only.
    */
   lineIds?: string[];
 }

@@ -1,6 +1,6 @@
 # Card audio and lyric-line language: Studio ↔ Android contract
 
-Status: **implemented in Reedance Studio 1.0.11**. Android work still to do is in §4.
+Status: **implemented in Reedance Studio 1.0.11 and Android 0.1.1 (`versionCode` 2, commits `23d8898`…`e2c511b`)**. Since Studio 1.0.12 the studio also publishes `grammar[].lineIds` (§3.2).
 Audience: the Android agent working on `khodehydro/reedance-android`.
 
 This document covers three things the studio now produces:
@@ -98,44 +98,44 @@ Turn times are the published `turns[].startMs/endMs`.
 
 ### 3.2 Song
 
-Song `lesson.json` stays **strict v1**: no new keys on cards. The links are derived from fields that already exist:
+Song `lesson.json` is strict v1. Android 0.1.1 added one optional key, `grammar[].lineIds`; every other link uses fields that already existed:
 
 | Card | Linked lines | Notes |
 |---|---|---|
-| vocabulary word `W` | every line with a token whose `lexemeId == W.lexemeId` | Several lines: either play the span (studio simulator) or offer per-occurrence playback; per-occurrence is recommended for words |
+| vocabulary word `W` | every line with a token whose `lexemeId == W.lexemeId` | Several lines possible |
 | sentence / idiom | `lineId` | Optional field; no ▶ when absent |
 | question | `lineId` | Optional field; no ▶ when absent |
-| grammar | — | No line link in `lesson.json` (see below) |
+| grammar | `lineIds` | Optional; 1–50 distinct lyric ids, none of them a foreign line |
 
 Line times are the published `lyrics[].startMs/endMs`. Never use foreign lines (§1.2); the studio guarantees there are none to find.
 
-**Grammar links are draft-only.** In the studio draft (`.rddraft.json`), `grammar[].lineIds` lets the editor and the simulator play a grammar card. The studio **strips it from `lesson.json`**, because the strict v1 schema would reject it.
+**Grammar links (`grammar[].lineIds`).**
+- `contracts/lesson.schema.json` is byte-identical to Android `contracts/v1/lesson.schema.json` at `e2c511b`. That file includes `lineIds` and `tr`.
+- **Studio 1.0.12 and later publish the field.** `assembleLesson` drops an empty list and writes the ids in lyric order. Export is blocked when an id is unknown or points to a foreign line.
+- Android 0.1.1 enforces the same rules in `LessonValidation.kt`.
+- ⚠️ Android **0.1.0** rejects a lesson that carries the key. Songs whose grammar cards have no linked line export exactly as before.
+- The draft also tolerates `lineIds: []` while editing.
 
-If Android later wants grammar playback for songs, the contract change is:
-
-- Add optional `grammar[].lineIds: string[]` to `lesson.schema.json`: `minItems 1`, unique, every id is a lyric id and not a foreign line.
-- Update this doc.
-
-The studio then only needs to stop stripping it; the data already exists in the drafts.
+**Playback grouping on Android.** Linked units at consecutive indices form one clip, from the earliest start to the latest end. Units that are not consecutive play separately: a ▶ for the first clip plus up to 8 numbered chips. ReeTalk questions keep the single continuous span. The studio simulator plays one span per card.
 
 ---
 
 ## 4. Android checklist
 
-1. **Lyric badge**: done in `959bdae`.
-2. **Not taught**: optional filter, see §1.2.
-3. **ReeTalk cards**:
-   - Read optional `evidenceTurnIds` on words, grammar and phrases in `DialogueLearning.kt`.
-   - Show "▶ شنیدن در مکالمه" using the existing evidence player.
-4. **Song cards**: add "▶ شنیدن در آهنگ" to vocabulary, sentence, idiom and question cards using §3.2.
-5. **Docs**: update `docs/reference/PACKAGE_V1.md`, `docs/interop/REETALK_PACKAGE_FA.md` and the minimum-turns note (the studio accepts 8 turns, 4 per speaker).
+All done in Android 0.1.1 (branch `arena/f1399a5c-reedance-android`):
+
+1. ✅ **Lyric badge**: `959bdae`.
+2. ✅ **Not taught**: `domain/CardClips.kt` (`teachingVocabulary`, `foreignLyricIds`). Review, the word game, Gym and line learning skip foreign lines.
+3. ✅ **ReeTalk cards**: `evidenceTurnIds` on words, grammar and phrases, validated in `ReeTalkInstaller.kt`. Cards show "▶ شنیدن در مکالمه".
+4. ✅ **Song cards**: "▶ شنیدن در آهنگ" on word, grammar, idiom, sentence and question cards, including quiz results. Uses a separate foreground player that pauses the main session without seeking it. Locked preview lines never play.
+5. ✅ **Docs and minimum turns**: `PACKAGE_V1.md` and `REETALK_PACKAGE_FA.md` updated. The installer now accepts 8–120 turns with ≥4 per speaker, matching the studio.
 
 ## 5. Studio side (for reference)
 
 - Validation:
   - Song: `src/main/validation.ts` (`validateContentSemantics`).
   - ReeTalk: `src/main/reetalk.ts` (`cardEvidence`, `publishLearning`).
-- Export: `src/main/lesson.ts` (`assembleLesson`) publishes `language` only when it differs from the song language and strips grammar `lineIds`.
+- Export: `src/main/lesson.ts` (`assembleLesson`) publishes `language` only when it differs from the song language. Since 1.0.12 it also publishes non-empty grammar `lineIds` in lyric order.
 - UI:
   - `SegmentAudio.tsx` provides the ▶ player and the line/turn picker.
   - The simulator has a "Cards" page for songs.

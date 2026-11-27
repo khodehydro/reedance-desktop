@@ -48,10 +48,12 @@
 - در فایل JSON همان فیلد `language` روی سطر است (مثل اندروید).
 
 **پخش قسمت مربوط به هر کارت (▶):** هر کارت لغت، گرامر، اصطلاح، جمله و سؤال یک دکمهٔ ▶ دارد. این دکمه از اولین شروع تا آخرین پایانِ سطرها/نوبت‌های مربوط را پخش می‌کند و دقیقاً همان‌جا می‌ایستد، مثل سؤال‌های ReeTalk.
+- از نسخهٔ 1.0.12، سطرهایی که برای کارت گرامر انتخاب می‌کنید با فیلد `grammar[].lineIds` داخل پکیج هم می‌روند. اپ اندروید از نسخهٔ 0.1.1 روی همهٔ کارت‌های آهنگ و ReeTalk دکمهٔ «شنیدن در آهنگ/مکالمه» دارد.
+- ⚠️ نسخهٔ 0.1.0 اندروید پکیجی را که این فیلد را دارد رد می‌کند. آهنگ‌هایی که کارت گرامرشان به هیچ سطری وصل نیست، دقیقاً مثل قبل خروجی می‌گیرند.
 - **آهنگ:**
   - لغت ← سطرهایی که توکنشان به آن واژه وصل است؛
   - اصطلاح، جمله و سؤال ← `lineId`؛
-  - گرامر ← سطرهایی که در کارت انتخاب می‌کنید (فقط برای پخش در استودیو؛ در `lesson.json` نمی‌رود).
+  - گرامر ← سطرهایی که در کارت انتخاب می‌کنید. از نسخهٔ 1.0.12 در `lesson.json` به‌صورت `grammar[].lineIds` منتشر می‌شوند.
 - **ReeTalk:** در هر کارت «نوبت‌های شاهد» را انتخاب کنید (دکمهٔ «پیدا کردن در مکالمه» نوبت‌هایی را که آن کلمه در آن‌ها آمده پیشنهاد می‌دهد). این پیوندها در `dialogue.json` به‌صورت `evidenceTurnIds` می‌روند.
 - در شبیه‌ساز، آهنگ صفحهٔ جدید **کارت‌ها** دارد و کارت‌های ReeTalk دکمهٔ «شنیدن در مکالمه» دارند.
 - قرارداد دقیق برای اپ اندروید: `docs/interop/CARD_AUDIO_AND_LINE_LANGUAGE.md`.
@@ -156,7 +158,7 @@ Keyboard: `Space` play/pause, `M` capture the selected line's start and advance,
 **▶ on every card.** Words, grammar, phrases, sentences and questions play from the earliest start to the latest end of their linked lines or turns, the same way ReeTalk question evidence plays.
 - **Song words** use the lines whose tokens carry the lexeme.
 - **Song phrases, sentences and questions** use `lineId`.
-- **Song grammar** uses lines you pick (studio-only, stripped from `lesson.json`).
+- **Song grammar** uses lines you pick. Since 1.0.12 they are exported as `grammar[].lineIds`, which needs Android 0.1.1 or later.
 - **ReeTalk cards** use evidence turns, exported as `evidenceTurnIds`.
 - In the simulator, songs have a new **Cards** page.
 - Android contract: `docs/interop/CARD_AUDIO_AND_LINE_LANGUAGE.md`.

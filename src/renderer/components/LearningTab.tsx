@@ -493,7 +493,7 @@ function GrammarCard({ item, onChange, onRemove }: { item: GrammarItem; onChange
         multiple
         value={item.lineIds ?? []}
         onChange={(ids) => patch({ lineIds: ids.length ? ids : undefined })}
-        label={t("سطرهایی که این نکته در آن‌ها شنیده می‌شود (فقط برای پخش در استودیو)", "Lines where this is heard (studio playback only)")}
+        label={t("سطرهایی که این نکته در آن‌ها شنیده می‌شود (برای دکمهٔ ▶ در استودیو و اپ اندروید 0.1.1+)", "Lines where this is heard (▶ in the studio and Android 0.1.1+)")}
       />
       <div className="form-grid">
         <Field label="id">

@@ -47,11 +47,12 @@ function extendContractLanguages(schema: Record<string, unknown>): Record<string
     if (!node || typeof node !== "object") return;
     const record = node as Record<string, unknown>;
     for (const [key, value] of Object.entries(record)) {
-      if (key === "enum" && Array.isArray(value) && value.length === 3 && ["en", "es", "ko"].every((lang) => value.includes(lang))) {
-        record[key] = [...SUPPORTED_LANGUAGES];
+      if (key === "enum" && Array.isArray(value) && ["en", "es", "ko"].every((lang) => value.includes(lang))) {
+        // Already-widened upstream copies (Android 0.1.1 ships `tr`) stay as they are.
+        record[key] = [...new Set([...value, ...SUPPORTED_LANGUAGES])];
         continue;
       }
-      if (typeof value === "string" && value.includes("?:en|es|ko")) {
+      if (typeof value === "string" && value.includes("^(?:en|es|ko)")) {
         record[key] = value.split("^(?:en|es|ko)").join(`^(?:${SUPPORTED_LANGUAGES.join("|")})`);
         continue;
       }
@@ -74,20 +75,22 @@ function newAjv(): Ajv2020 {
 }
 
 /**
- * Authoring-only fields the draft may carry on top of lesson v1. They link a
- * card to the song for playback in the studio and are stripped by
- * `assembleLesson`, so the published lesson.json stays exactly v1.
+ * Draft leniency on top of lesson v1. Since Android 0.1.1 the contract itself
+ * defines `grammar[].lineIds` (1–50 distinct lyric ids) and the studio
+ * publishes it. While editing, a card may briefly have no line left (for
+ * example after its only line was deleted), so the draft also accepts `[]`;
+ * `assembleLesson` drops empty lists so lesson.json always satisfies v1.
  */
 export function extendDraftOnlyFields(lessonSchema: Record<string, unknown>): Record<string, unknown> {
   const defs = lessonSchema.$defs as Record<string, { properties?: Record<string, unknown> }>;
   const grammar = defs?.grammarItem;
   if (grammar?.properties) {
+    const published = (grammar.properties.lineIds ?? {}) as Record<string, unknown>;
     grammar.properties.lineIds = {
       type: "array",
-      maxItems: 20,
+      maxItems: typeof published.maxItems === "number" ? published.maxItems : 50,
       uniqueItems: true,
       items: { $ref: "#/$defs/id" },
-      description: "Studio-only: lyric lines this grammar card explains (played from the card). Not in lesson.json v1.",
     };
   }
   return lessonSchema;
@@ -100,7 +103,7 @@ function ensureAjv(): void {
   const lessonSchema = extendContractLanguages(loadSchema("lesson.schema.json"));
   lessonInstance.addSchema(lessonSchema, "urn:reedance:lesson:v1");
   lessonValidator = lessonInstance.getSchema("urn:reedance:lesson:v1") ?? lessonInstance.compile(lessonSchema);
-  // Draft: same definitions plus the authoring-only link fields.
+  // Draft: same definitions, but an emptied grammar link list is tolerated.
   const draftInstance = newAjv();
   const draftLesson = extendDraftOnlyFields(extendContractLanguages(loadSchema("lesson.schema.json")));
   const draftSchema = extendContractLanguages(loadSchema("draft.schema.json"));

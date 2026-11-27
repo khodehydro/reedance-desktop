@@ -109,8 +109,13 @@ export function assembleLesson(input: {
         }
       : {}),
     vocabulary: content.vocabulary,
-    // `lineIds` is a studio-only link (card → song playback), not lesson v1.
-    grammar: content.grammar.map(({ lineIds: _lineIds, ...item }) => item),
+    // `grammar[].lineIds` (card → song playback) is part of lesson v1 since
+    // Android 0.1.1. Empty or emptied lists are dropped; order follows the lyrics.
+    grammar: content.grammar.map(({ lineIds, ...item }) => {
+      const linked = new Set(lineIds ?? []);
+      const ordered = content.lyrics.map((line) => line.id).filter((id) => linked.has(id));
+      return ordered.length ? { ...item, lineIds: ordered } : item;
+    }),
     idioms: content.idioms,
     sentences: content.sentences,
     vocabularyTables: content.vocabularyTables,
